@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "saa-livekit-client"
+version = "0.1.0"
+description = "LiveKit client for the saa hosted bridge — consume attention/interrupt/interjection events inside your voice agent."
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [
+    { name = "Attention Labs" },
+]
+readme = "README.md"
+keywords = ["livekit", "voice-agent", "attention", "vad", "turn-detection"]
+dependencies = [
+    "livekit>=1.0",
+    "livekit-api>=1.0",
+    "livekit-agents>=1.0",
+    "httpx>=0.25",
+]
+
+[project.urls]
+Homepage = "https://attentionlabs.ai"
+Documentation = "https://attentionlabs.ai/docs/livekit"
+
+[tool.setuptools]
+packages = ["saa_livekit_client"]
+
+[tool.setuptools.package-dir]
+saa_livekit_client = "."
