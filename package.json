@@ -6,14 +6,11 @@
   "license": "Apache-2.0",
   "type": "module",
   "workspaces": [
-    "packages/saa-js",
-    "packages/saa-gate",
-    "packages/saa-proactive-js",
-    "examples/obs-overlay"
+    "packages/saa-js"
   ],
   "scripts": {
     "build:js": "npm run build --workspace=@attenlabs/saa-js",
-    "test:js": "npm run build:js && node --test packages/saa-gate/tests/*.test.mjs packages/saa-proactive-js/tests/*.test.mjs examples/obs-overlay/tests/*.test.mjs",
+    "test:js": "npm run build:js",
     "test:py": "cd packages/saa-py && python -m pytest -q tests",
     "test": "npm run test:js && npm run test:py"
   },
