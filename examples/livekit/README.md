@@ -25,16 +25,27 @@ All target **LiveKit Agents 1.5.x** using the `AgentServer` + `@server.rtc_sessi
 
 ## Shared environment
 
-Every sample needs the SAA + LiveKit credentials:
+All samples read **one** env file — [`.env`](./.env.example) in this directory — so `LIVEKIT_*` (which the browser and the agent must share) lives in exactly one place and can't drift.
 
-```
-SAA_API_KEY=                 # Attention Labs hosted bridge
-LIVEKIT_URL=                 # wss://your-project.livekit.cloud
-LIVEKIT_API_KEY=
-LIVEKIT_API_SECRET=
+```bash
+cd examples/livekit
+cp .env.example .env          # then fill it in once
 ```
 
-The cascaded sample additionally needs provider keys (`DEEPGRAM_API_KEY`, `OPENAI_API_KEY`, `CARTESIA_API_KEY`) unless you switch it to LiveKit's inference gateway; the realtime sample needs `OPENAI_API_KEY`. See each sample's `.env.example`.
+It holds the union of every sample's keys, grouped by which sample needs them:
+
+| Key | Used by |
+|---|---|
+| `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | all three — must be the **same** project |
+| `SAA_API_KEY` | the voice agents (the web token server doesn't summon SAA) |
+| `OPENAI_API_KEY` | realtime (the model) + cascaded (the LLM) |
+| `DEEPGRAM_API_KEY` / `CARTESIA_API_KEY` | cascaded only (STT/TTS), unless on the inference gateway |
+
+Load it from a sample dir before running:
+
+```bash
+set -a && source ../.env && set +a
+```
 
 ## The five lines that integrate SAA
 

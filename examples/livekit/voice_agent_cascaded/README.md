@@ -30,8 +30,8 @@ pip install -r requirements.txt
 # local dev against this repo's copy of the client:
 pip install -e ../../../packages/saa-livekit-client
 
-cp .env.example .env   # then fill in the keys
-set -a && source .env && set +a
+# shared env one dir up — cp ../.env.example ../.env and fill it in once
+set -a && source ../.env && set +a
 
 python src/agent.py dev   # dev mode auto-dispatches the agent to new rooms
 ```

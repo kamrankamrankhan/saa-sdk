@@ -25,14 +25,16 @@ which is exactly when the agent is allowed to hear you.
 
 ## Run
 
-Both halves must point at the **same LiveKit project**, or the browser and the
-agent never meet in the same room.
+Both halves read the shared [`examples/livekit/.env`](../.env.example), so
+`LIVEKIT_*` is identical by construction — fill it in once:
+`cd examples/livekit && cp .env.example .env`.
 
 **Terminal 1 — a voice agent** (owns SAA, auto-dispatches into new rooms):
 
 ```bash
 cd ../voice_agent_realtime          # or ../voice_agent_cascaded
-# fill its .env: LIVEKIT_*, SAA_API_KEY, OPENAI_API_KEY (+ STT/TTS keys for cascaded)
+pip install -r requirements.txt && pip install -e ../../../packages/saa-livekit-client
+set -a && source ../.env && set +a
 python agent.py dev
 ```
 
@@ -41,8 +43,7 @@ python agent.py dev
 ```bash
 cd examples/livekit/web
 pip install -r requirements.txt
-cp .env.example .env                # LIVEKIT_* only — must match the agent's project
-set -a && source .env && set +a
+set -a && source ../.env && set +a
 uvicorn token_server:app --port 8000
 # open http://localhost:8000 and click Start
 ```

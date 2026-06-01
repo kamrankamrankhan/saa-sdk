@@ -27,8 +27,8 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e ../../../packages/saa-livekit-client   # local dev against this repo
 
-cp .env.example .env   # then fill in the keys
-set -a && source .env && set +a
+# shared env one dir up — cp ../.env.example ../.env and fill it in once
+set -a && source ../.env && set +a
 
 python agent.py dev
 ```
