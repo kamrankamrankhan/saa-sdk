@@ -1,6 +1,10 @@
 # minimal dev token endpoint for the SAA + LiveKit web demo — NOT for production
-# mints a browser join token and summons the hidden SAA agent for the room
-# the SAA API key stays server-side; the browser never sees it
+# mints a browser LiveKit join token and serves the static files
+#
+# SAA is summoned by the voice-agent worker in the room, NOT here — run one of
+# examples/livekit/voice_agent_cascaded or voice_agent_realtime in the same
+# LiveKit project alongside this demo. The agent owns the SAA session and
+# answers you; this server just lets the browser join the room.
 import os
 from datetime import timedelta
 
@@ -8,8 +12,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from livekit.api import AccessToken, VideoGrants
-
-from saa_livekit_client import attention_agent_token, start_attention_session
 
 app = FastAPI()
 app.add_middleware(
@@ -22,7 +24,7 @@ app.add_middleware(
 
 @app.get("/token")
 async def token(room: str, identity: str) -> dict:
-    # browser join token — publish cam+mic, subscribe to others
+    # browser join token — publish cam+mic, subscribe to the agent's audio
     user_jwt = (
         AccessToken(os.environ["LIVEKIT_API_KEY"], os.environ["LIVEKIT_API_SECRET"])
         .with_identity(identity)
@@ -32,26 +34,7 @@ async def token(room: str, identity: str) -> dict:
         .with_ttl(timedelta(hours=1))
         .to_jwt()
     )
-
-    # summon the hidden SAA agent for this room
-    handle = await start_attention_session(
-        api_key=os.environ["SAA_API_KEY"],
-        livekit_url=os.environ["LIVEKIT_URL"],
-        agent_token=attention_agent_token(
-            api_key=os.environ["LIVEKIT_API_KEY"],
-            api_secret=os.environ["LIVEKIT_API_SECRET"],
-            room_name=room,
-        ),
-        room_name=room,
-        participant_identity=identity,
-    )
-
-    return {
-        "url": os.environ["LIVEKIT_URL"],
-        "token": user_jwt,
-        "agent_identity": handle.agent_identity,
-        "session_id": handle.session_id,
-    }
+    return {"url": os.environ["LIVEKIT_URL"], "token": user_jwt}
 
 
 # serve index.html + app.js + styles.css from the same origin
