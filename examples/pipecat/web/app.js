@@ -39,13 +39,14 @@ async function start() {
   call.on("participant-updated", onParticipantUpdated);
   call.on("left-meeting", () => setStatus("disconnected"));
 
-  await call.join({ url: room_url, token: user_token });
+  // start both tracks
+  await call.join({
+    url: room_url,
+    token: user_token,
+    startVideoOff: false,
+    startAudioOff: false,
+  });
   setStatus("connected");
-
-  // publish cam + mic (SAA is multimodal — it wants both)
-  await call.startCamera();
-  await call.setLocalAudio(true);
-  await call.setLocalVideo(true);
 
   // resolve agent session_id in case it's already in the room
   resolveAgentSessionId();

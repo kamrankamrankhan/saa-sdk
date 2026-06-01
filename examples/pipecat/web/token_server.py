@@ -53,7 +53,7 @@ async def _create_daily_room() -> dict:
     return {"name": body["name"], "url": body["url"]}
 
 
-async def _mint_user_token(room_name: str) -> str:
+async def _mint_user_token(room_name: str, user_name: str) -> str:
     # normal-user meeting token: full canSend, visible in the participant list
     async with httpx.AsyncClient(timeout=20.0) as http:
         r = await http.post(
@@ -62,7 +62,7 @@ async def _mint_user_token(room_name: str) -> str:
             json={
                 "properties": {
                     "room_name": room_name,
-                    "user_name": f"user-{int(time.time())}",
+                    "user_name": user_name,
                     "exp": int(time.time()) + 3600,
                 }
             },
@@ -86,7 +86,9 @@ async def session(room: str | None = None) -> dict:
         room_name = info["name"]
         room_url = info["url"]
 
-    user_token = await _mint_user_token(room_name)
+    # one identity, used for both the meeting token and for telling SAA
+    human_identity = f"user-{int(time.time())}"
+    user_token = await _mint_user_token(room_name, human_identity)
 
     # mint hidden-bot meeting token using OUR Daily API key (dev demo only —
     # in production the customer mints this on their side with their own key)
@@ -100,12 +102,13 @@ async def session(room: str | None = None) -> dict:
         api_key=os.environ["SAA_API_KEY"],
         room_url=room_url,
         agent_token=agent_token,
-        participant_identity="user",
+        participant_identity=human_identity,
     )
 
     return {
         "room_url": room_url,
         "user_token": user_token,
+        "user_name": human_identity,
         "agent_identity": handle.agent_identity,
         "session_id": handle.session_id,
     }

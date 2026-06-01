@@ -20,8 +20,9 @@ This is the Daily/Pipecat sibling of [`examples/livekit/web`](../../livekit/web)
 cd examples/pipecat/web
 python -m venv .venv && source .venv/bin/activate
 
+# install the in-tree client
+pip install -e ../../../packages/saa-pipecat-client
 pip install -r requirements.txt
-pip install -e ../../../packages/saa-pipecat-client   # local dev against this repo
 
 cp .env.example .env   # then fill in SAA_API_KEY and DAILY_API_KEY
 set -a && source .env && set +a
