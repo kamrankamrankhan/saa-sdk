@@ -1,9 +1,6 @@
-# dev token server only — no livekit-agents needed
+# dev token server only — a pure LiveKit token minter.
+# SAA is summoned by the voice-agent worker in the room (voice_agent_cascaded /
+# voice_agent_realtime), so this demo needs no saa-livekit-client / livekit-agents.
 livekit-api>=1.0
 fastapi>=0.110
 uvicorn>=0.27
-
-# SAA LiveKit hosted-bridge client
-# for local dev against this repo, install the in-tree copy instead:
-#   pip install -e ../../../packages/saa-livekit-client
-saa-livekit-client>=0.1.0
