@@ -43,6 +43,15 @@ header h1 {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  text-align: right;
+  max-width: 60%;
+}
+
+.status.error {
+  color: #ff5c5c;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
 }
 
 #prediction {
