@@ -2,8 +2,5 @@
 livekit-agents>=1.5
 livekit-plugins-openai
 livekit-plugins-silero
-
-# SAA LiveKit hosted-bridge client
-# for local dev against this repo, install the in-tree copy instead:
-#   pip install -e ../../../packages/saa-livekit-client
+python-dotenv>=1.0
 saa-livekit-client>=0.1.0

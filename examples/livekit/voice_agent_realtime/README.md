@@ -22,13 +22,10 @@ Same shape as the [cascaded sample](../voice_agent_cascaded), single file ([`age
 
 ```bash
 cd examples/livekit/voice_agent_realtime
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
 pip install -e ../../../packages/saa-livekit-client   # local dev against this repo
-
-# shared env one dir up — cp ../.env.example ../.env and fill it in once
-set -a && source ../.env && set +a
 
 python agent.py dev
 ```

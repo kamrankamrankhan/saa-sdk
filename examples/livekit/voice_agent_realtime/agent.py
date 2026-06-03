@@ -15,6 +15,10 @@ from saa_livekit_client import (
     start_attention_session,
 )
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+# auto-load the shared examples/livekit/.env
 logger = logging.getLogger("voice-agent-realtime")
 
 
@@ -45,6 +49,7 @@ async def entrypoint(ctx: JobContext) -> None:
         ),
         room_name=ctx.room.name,
         participant_identity=user.identity,
+        attention_config={"frames_per_turn": 0},
     )
     ctx.add_shutdown_callback(saa.stop)
 
