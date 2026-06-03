@@ -19,26 +19,28 @@ No model weights, no ML dependencies, and no media ever enter your process — t
 |---|---|---|
 | [`voice_agent_cascaded/`](./voice_agent_cascaded) | Silero VAD → Deepgram STT → OpenAI LLM → Cartesia TTS, SAA-gated | `python src/agent.py dev` |
 | [`voice_agent_realtime/`](./voice_agent_realtime) | OpenAI Realtime (speech-to-speech), SAA-gated — the case stock LiveKit can't gate | `python agent.py dev` |
-| [`web/`](./web) | Vanilla HTML + `livekit-client` browser client rendering the prediction overlay | `uvicorn token_server:app` |
+| [`web/`](./web) | Vanilla HTML + `livekit-client` browser client rendering the prediction overlay | `python -m uvicorn token_server:app` |
 
 All target **LiveKit Agents 1.5.x** using the `AgentServer` + `@server.rtc_session()` shape. (`WorkerOptions(entrypoint_fnc=...)` also works on 1.5.x and is the older idiom.)
 
 ## Quick start — realtime agent + web client
 
-Talk to a SAA-gated OpenAI Realtime agent in your browser. Two terminals, one shared `.env`.
+Talk to a SAA-gated OpenAI Realtime agent in your browser. Two terminals, one shared `.env`. Needs **Python 3.10+**.
 
 ```bash
 cd examples/livekit
 cp .env.example .env     # fill LIVEKIT_*, SAA_API_KEY, OPENAI_API_KEY (see Shared environment)
 ```
 
+The samples **auto-load** this `.env`, so the commands below are identical on Windows, macOS, and Linux — no shell `source` step.
+
 **Terminal 1 — the realtime voice agent** (owns SAA, auto-joins new rooms):
 
 ```bash
 cd examples/livekit/voice_agent_realtime
+python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -e ../../../packages/saa-livekit-client
 pip install -r requirements.txt
-set -a && source ../.env && set +a
 python agent.py dev
 ```
 
@@ -46,14 +48,14 @@ python agent.py dev
 
 ```bash
 cd examples/livekit/web
+python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-set -a && source ../.env && set +a
-uvicorn token_server:app --port 8000
+python -m uvicorn token_server:app --port 8000
 ```
 
 Open <http://localhost:8000> and click **Start**. The browser creates a room, the realtime agent auto-joins and summons SAA, and you're talking — it answers only when you address it, and the pill goes green at exactly those moments. Status shows `waiting for agent…` until the agent's audio arrives.
 
-> Start the agent **before** clicking Start, so it's registered for the room dispatch. Both halves use the same LiveKit project by construction (the one shared `.env`).
+> Start the agent **before** clicking Start, so it's registered for the room dispatch. Both halves use the same LiveKit project by construction (the one shared `.env`). `python -m uvicorn` (not bare `uvicorn`) ensures the venv's interpreter is used.
 
 ## Shared environment
 
@@ -73,11 +75,7 @@ It holds the union of every sample's keys, grouped by which sample needs them:
 | `OPENAI_API_KEY` | realtime (the model) + cascaded (the LLM) |
 | `DEEPGRAM_API_KEY` / `CARTESIA_API_KEY` | cascaded only (STT/TTS), unless on the inference gateway |
 
-Load it from a sample dir before running:
-
-```bash
-set -a && source ../.env && set +a
-```
+Each sample **auto-loads** this file (via `python-dotenv`) from `examples/livekit/.env` — no shell `source` needed, so setup is identical on Windows, macOS, and Linux. Anything you've already exported (or that Docker/CI injects) takes precedence over the file.
 
 ## The five lines that integrate SAA
 
