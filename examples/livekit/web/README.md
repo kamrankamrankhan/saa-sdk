@@ -33,6 +33,7 @@ construction. Fill it in once: `cd examples/livekit && cp .env.example .env`.
 
 ```bash
 cd ../voice_agent_realtime          # or ../voice_agent_cascaded
+python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt && pip install -e ../../../packages/saa-livekit-client
 python agent.py dev
 ```
@@ -41,6 +42,7 @@ python agent.py dev
 
 ```bash
 cd examples/livekit/web
+python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python -m uvicorn token_server:app --port 8000
 # open http://localhost:8000 and click Start
