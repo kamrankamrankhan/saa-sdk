@@ -7,11 +7,15 @@
 # answers you; this server just lets the browser join the room.
 import os
 from datetime import timedelta
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from livekit.api import AccessToken, VideoGrants
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 app = FastAPI()
 app.add_middleware(
