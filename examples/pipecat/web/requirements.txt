@@ -2,8 +2,5 @@ fastapi>=0.110
 uvicorn[standard]>=0.27
 httpx>=0.25
 python-dotenv>=1.0
-
-# SAA Pipecat hosted-bridge client
-# for local dev against this repo, install the in-tree copy instead:
-#   pip install -e ../../../packages/saa-pipecat-client
-saa-pipecat-client>=0.1.0
+# saa-pipecat-client>=0.1.0 - uncomment till publish
+pipecat-ai[daily,silero,deepgram,openai,cartesia]>=1.0.0,<2

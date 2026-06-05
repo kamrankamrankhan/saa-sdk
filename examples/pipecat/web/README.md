@@ -1,6 +1,8 @@
-# web — SAA + Daily browser demo
+# web — all-in-one SAA + Daily browser demo
 
-A vanilla HTML/JS client that joins a Daily room, publishes cam+mic, and renders SAA's prediction stream as a live overlay — no build step, no framework. The address-decision flips the pill green only when you're talking *to* the device.
+A single `uvicorn` process that creates an ephemeral Daily room, summons the hidden SAA agent, **spawns a Pipecat voice agent into the same room** (when provider keys are present), and serves a vanilla HTML/JS frontend that renders SAA's prediction stream as a live overlay. No build step, no framework, one terminal.
+
+The address-decision flips the pill green only when you're talking *to* the device — and when the voice agent is enabled, it talks back only on green-pill turns.
 
 This is the Daily/Pipecat sibling of [`examples/livekit/web`](../../livekit/web). Same UI, same SAA event shapes, different transport underneath.
 
@@ -8,11 +10,23 @@ This is the Daily/Pipecat sibling of [`examples/livekit/web`](../../livekit/web)
 
 | File | What it is |
 |---|---|
-| [`token_server.py`](./token_server.py) | tiny FastAPI endpoint — creates an ephemeral Daily room, mints a user meeting token, and summons the hidden SAA agent. Serves the static files too. |
-| [`index.html`](./index.html) | UI shell (prediction pill, confidence bar, VAD/faces, video). |
+| [`token_server.py`](./token_server.py) | FastAPI dev server. `/session` creates a Daily room, mints user + bot meeting tokens, summons the hidden SAA agent, and (if provider keys are present) spawns the voice agent in-process. Serves the static files too. |
+| [`voice_agent.py`](./voice_agent.py) | The embedded Pipecat voice agent — `async run_voice_agent(...)` factored from [`voice_agent_cascaded`](../voice_agent_cascaded) so token_server.py can launch it per /session. |
+| [`index.html`](./index.html) | UI shell (prediction pill, confidence bar, VAD/faces, video, mode badge). |
 | [`app.js`](./app.js) | call-object Daily client, publishes tracks, consumes the `"saa"` app-message topic. |
 | [`turn-parser.js`](./turn-parser.js) | decodes the binary turn payload (PCM16 + JPEGs). |
 | [`styles.css`](./styles.css) | minimal styling. |
+
+## Two modes — overlay only vs. talkback
+
+The demo runs in one of two modes depending on what's in `.env`:
+
+| Mode | Requires | What you get |
+|---|---|---|
+| **Talkback** | `SAA_API_KEY`, `DAILY_API_KEY`, `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY` | The voice agent joins your room and responds with TTS — but only when SAA says you're addressing the device. Side conversations are dropped before STT fires. |
+| **Overlay only** | `SAA_API_KEY`, `DAILY_API_KEY` | The browser still renders SAA predictions live (use it to tune `vad_threshold` or watch class-1/class-2 transitions), but nothing talks back. |
+
+The token_server logs which mode it's in on startup, and the UI's header shows it too once you click Start.
 
 ## Run
 
@@ -20,16 +34,19 @@ This is the Daily/Pipecat sibling of [`examples/livekit/web`](../../livekit/web)
 cd examples/pipecat/web
 python -m venv .venv && source .venv/bin/activate
 
-# install the in-tree client
+# install the in-tree client FIRST so the requirements.txt version spec
+# resolves locally — saa-pipecat-client is not on PyPI yet
 pip install -e ../../../packages/saa-pipecat-client
 pip install -r requirements.txt
 
-cp .env.example .env   # then fill in SAA_API_KEY and DAILY_API_KEY
+cp .env.example .env   # fill in the keys — at minimum SAA_API_KEY + DAILY_API_KEY
 set -a && source .env && set +a
 
 uvicorn token_server:app --port 8000
 # open http://localhost:8000 and click Start
 ```
+
+The voice-agent track in `requirements.txt` (`pipecat-ai[daily,silero,deepgram,openai,cartesia]>=1.0.0,<2`) is the big install — if you only need the overlay path you can comment it out, but importing `voice_agent.py` will then fail loudly on startup. The simpler thing is to install everything once and let the runtime mode toggle decide whether to actually spawn the agent.
 
 ## How the overlay is wired
 
@@ -50,13 +67,14 @@ Daily has no byte-stream primitive, so the per-turn binary blob (PCM16 + JPEGs, 
 
 The reassembly map is capped at 10 in-flight streams; oldest is dropped on overflow.
 
-This demo only **logs** the decoded PCM + frame count — that's where you'd forward the captured turn audio to your own STT or recorder. For an actual voice agent that responds, see [`../voice_agent_cascaded`](../voice_agent_cascaded).
+## How the voice agent is wired
 
-## What this demo does NOT do
+`voice_agent.py` is the cascaded Pipecat agent ([`voice_agent_cascaded`](../voice_agent_cascaded) is the standalone reference). When `/session` fires, token_server.py mints a Daily meeting token for the bot, hands it + the SAA hosted session's `agent_identity` to `run_voice_agent(...)`, and spawns the result as an asyncio task. The agent joins the room a beat after the human does, wires its own `AttentionEngine` against the same SAA bot the browser is listening to, and runs the Silero-VAD → Deepgram → OpenAI → Cartesia pipeline gated by SAA predictions.
 
-- **No voice agent.** It only renders SAA's gating signal. If you want the agent to actually talk back, run `voice_agent_cascaded` alongside or in place of this.
-- **No upstream actions.** `mute` / `responding_start` / `set_threshold` aren't wired here — they belong on the voice-agent side, gated by your TTS state.
+Lifecycle: the agent shuts down on `on_participant_left` (when you click Stop in the browser). The SAA hosted session is owned by token_server.py — it stays alive until the broker reaps it on idle (~5 min).
 
 ## Production warning
 
-`token_server.py` is **dev-only**: it has open CORS, creates a new billed Daily room on every `/session` hit, and starts a billed SAA session at the same time. For production you need auth on `/session`, rate limiting, a real room/identity policy, and your customers should mint the hidden-bot token using *their* Daily API key — not ours. The SAA API key must always stay server-side; the browser only ever receives the Daily room URL, user token, and the agent identity.
+`token_server.py` is **dev-only**: open CORS, creates a billed Daily room on every `/session` hit, starts a billed SAA session, and (in talkback mode) burns OpenAI/Deepgram/Cartesia tokens per turn. For production you need auth on `/session`, rate limiting, a real room/identity policy, and your customers should mint the hidden-bot token using *their* Daily API key — not ours. The SAA API key, the provider keys, and the Daily API key must always stay server-side; the browser only ever receives the Daily room URL, its own user meeting token, and the SAA agent identity.
+
+For deploying the voice agent without the FastAPI scaffold (Daily Bots, Pipecat Cloud, Modal, k8s), use [`voice_agent_cascaded`](../voice_agent_cascaded) — same agent logic with a standalone `python src/agent.py` entrypoint and a `Dockerfile`.
