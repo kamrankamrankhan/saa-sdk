@@ -21,9 +21,36 @@ No model weights, no ML dependencies, and no media ever enter your process — t
 | [`voice_agent_cascaded/`](./voice_agent_cascaded) | Silero VAD → Deepgram STT → OpenAI LLM → Cartesia TTS on Daily, SAA-gated | `python src/agent.py` |
 | [`web/`](./web) | Vanilla HTML + `@daily-co/daily-js` browser client rendering the prediction overlay | `uvicorn token_server:app` |
 
-All target **pipecat-ai >= 1.0.0** (the `pipecat.transports.daily.transport` canonical import path; the legacy `pipecat.transports.services.daily` alias was removed in 1.0.0) and **daily-python >= 0.19.0** (current 3-arg renderer-callback signature + `canReceive` enforcement).
+## Prerequisites
 
-**Python 3.11+ is required.** pipecat-ai 1.x dropped Python 3.10 support
+### Supported platforms
+
+| Platform | Status | Notes |
+|---|---|---|
+| **macOS** (arm64 + x86_64) | ✅ supported | daily-python ships wheels for both architectures. |
+| **Linux** (x86_64 + aarch64) | ✅ supported | daily-python wheels are built against manylinux_2_28 |
+| **Windows** (native) | ❌ not supported | daily-python publishes no Windows wheels and no source distribution. Use **WSL2** and follow the Linux instructions inside your WSL shell. |
+
+### Python 3.11+
+
+pipecat-ai 1.x dropped Python 3.10 support, so 3.11+ is required. `pip install` on 3.10 fails with `Package 'saa-pipecat-client' requires a different Python: 3.10.x not in '>=3.11'`.
+
+| Platform | Install Python 3.11 |
+|---|---|
+| macOS (Homebrew) | `brew install python@3.11` |
+| Debian / Ubuntu | `sudo apt-get update && sudo apt-get install -y python3.11 python3.11-venv` |
+| Fedora / RHEL | `sudo dnf install -y python3.11` |
+| Arch | `sudo pacman -S python311` (AUR; or use `pyenv install 3.11`) |
+| WSL2 (Ubuntu) | Same as Debian / Ubuntu — inside the WSL shell, not PowerShell. |
+| Any platform | [`pyenv install 3.11`](https://github.com/pyenv/pyenv) is the framework-agnostic option. |
+
+### Activating the venv
+
+The shared shell snippet in each sample's quickstart is:
+
+```bash
+python3.11 -m venv .venv && source .venv/bin/activate
+```
 
 ## Shared environment
 

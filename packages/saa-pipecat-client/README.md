@@ -17,6 +17,8 @@ calling our REST endpoint, and listening for typed events.
 pip install saa-pipecat-client
 ```
 
+**Requirements**: Python **3.11+** (pipecat-ai 1.x dropped 3.10). **macOS / Linux / WSL2 only**
+
 ## Quickstart — existing Pipecat bot
 
 ```python

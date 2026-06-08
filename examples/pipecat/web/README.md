@@ -30,10 +30,14 @@ The token_server logs which mode it's in on startup, and the UI's header shows i
 
 ## Run
 
+**Platforms**: macOS + Linux + WSL2. Native Windows is not supported.
+
 ```bash
 cd examples/pipecat/web
 
-# Python 3.11+ is required: pipecat-ai 1.x dropped 3.10 support
+# Python 3.11+ is required (pipecat-ai 1.x dropped 3.10 support).
+# macOS: brew install python@3.11
+# Debian/Ubuntu/WSL2: sudo apt-get install python3.11 python3.11-venv
 python3.11 -m venv .venv && source .venv/bin/activate
 
 # install the in-tree client FIRST so the requirements.txt version spec
