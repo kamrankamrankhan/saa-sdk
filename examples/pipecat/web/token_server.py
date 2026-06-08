@@ -63,6 +63,28 @@ async def _log_mode() -> None:
             ", ".join(missing),
         )
 
+    key = os.environ.get("DAILY_API_KEY") or ""
+    if not key:
+        logger.warning("DAILY_API_KEY is not set; /session will return 500.")
+    elif key.startswith("eyJ"):
+        logger.warning(
+            "DAILY_API_KEY looks like a JWT (starts with 'eyJ') — that's a "
+            "Daily MEETING TOKEN, not a REST API key. /session will 401 from "
+            "Daily. Get the REST key at https://dashboard.daily.co -> Developers."
+        )
+    elif key.startswith("pk_") or key.startswith("sk_"):
+        logger.warning(
+            "DAILY_API_KEY starts with 'pk_'/'sk_' — that's a Pipecat Cloud "
+            "token, NOT a Daily REST key. /session will 401. The Daily REST key "
+            "lives at https://dashboard.daily.co -> Developers (or, if you "
+            "signed up via Pipecat Cloud, at https://pipecat.daily.co -> "
+            "Settings -> Daily (WebRTC) tab)."
+        )
+    else:
+        logger.info(
+            "DAILY_API_KEY fingerprint: %s (will be sent as 'Authorization: "
+            "Bearer ...' to api.daily.co)", _daily_key_fingerprint(),
+        )
 
 @app.on_event("shutdown")
 async def _shutdown_agents() -> None:
@@ -84,6 +106,35 @@ def _daily_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {key}"}
 
 
+def _daily_key_fingerprint() -> str:
+    key = os.environ.get("DAILY_API_KEY") or ""
+    if len(key) <= 8:
+        return f"(len={len(key)})"
+    return f"{key[:4]}…{key[-4:]} (len={len(key)})"
+
+
+def _daily_credential_hint() -> str:
+    """Pattern-match the configured DAILY_API_KEY against common look-alikes
+    so a 401 tells the user *which* wrong credential they likely supplied."""
+    key = os.environ.get("DAILY_API_KEY") or ""
+    if not key:
+        return "DAILY_API_KEY is empty."
+    if key.startswith("eyJ"):
+        return (
+            "Your DAILY_API_KEY looks like a JWT (starts with 'eyJ'). That's a "
+            "Daily MEETING TOKEN, not a Daily REST API key."
+        )
+    if key.startswith("pk_") or key.startswith("sk_"):
+        return (
+            "Your DAILY_API_KEY starts with 'pk_'/'sk_' — that's a Pipecat Cloud "
+            "token (for api.pipecat.daily.co), NOT a Daily REST key."
+        )
+    return (
+        "Daily REST returned authentication-error for the key at "
+        f"{_daily_key_fingerprint()}."
+    )
+
+
 async def _create_daily_room() -> dict:
     # ephemeral room that auto-expires 1h out, dev-only
     name = f"saa-demo-{int(time.time())}"
@@ -96,14 +147,29 @@ async def _create_daily_room() -> dict:
                 "name": name,
                 "properties": {
                     "exp": exp,
-                    "app_message_size_limit": 65536,
                 },
             },
         )
     if r.status_code >= 300:
-        raise HTTPException(r.status_code, f"daily rooms create failed: {r.text}")
+        raise HTTPException(r.status_code, _daily_error_detail("rooms create", r))
     body = r.json()
     return {"name": body["name"], "url": body["url"]}
+
+
+def _daily_error_detail(action: str, resp: httpx.Response) -> str:
+    """Tester-friendly error message for any non-2xx from api.daily.co.
+    """
+    body = resp.text
+    if resp.status_code in (400, 401):
+        return (
+            f"daily {action} failed ({resp.status_code}). "
+            f"Daily said: {body}\n\n"
+            f"{_daily_credential_hint()}\n\n"
+            f"Key fingerprint (first4…last4): {_daily_key_fingerprint()}. "
+            f"Compare it against the value shown at "
+            f"https://dashboard.daily.co -> Developers."
+        )
+    return f"daily {action} failed ({resp.status_code}): {body}"
 
 
 async def _mint_meeting_token(
@@ -125,7 +191,7 @@ async def _mint_meeting_token(
             },
         )
     if r.status_code >= 300:
-        raise HTTPException(r.status_code, f"daily token mint failed: {r.text}")
+        raise HTTPException(r.status_code, _daily_error_detail("token mint", r))
     return r.json()["token"]
 
 

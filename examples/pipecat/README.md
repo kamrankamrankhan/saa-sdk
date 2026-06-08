@@ -18,7 +18,7 @@ No model weights, no ML dependencies, and no media ever enter your process — t
 
 | Sample | Stack | Run |
 |---|---|---|
-| [`voice_agent_cascaded/`](./voice_agent_cascaded) | Silero VAD → Deepgram STT → OpenAI LLM → Cartesia TTS on Daily, SAA-gated | `python src/agent.py` |
+| [`voice_agent_cascaded/`](./voice_agent_cascaded) | Silero VAD -> Deepgram STT -> OpenAI LLM -> Cartesia TTS on Daily, SAA-gated | `python src/agent.py` |
 | [`web/`](./web) | Vanilla HTML + `@daily-co/daily-js` browser client rendering the prediction overlay | `uvicorn token_server:app` |
 
 ## Prerequisites
@@ -58,7 +58,7 @@ Every sample needs the SAA + Daily credentials:
 
 ```
 SAA_API_KEY=                 # Attention Labs hosted bridge (shared with LiveKit samples)
-DAILY_API_KEY=               # Daily REST — mints the hidden-bot meeting token on your side
+DAILY_API_KEY=               # Daily.co REST key from dashboard.daily.co
 ```
 
 The cascaded sample additionally needs:
@@ -106,4 +106,9 @@ Plus a `BotSpeakingObserver` FrameProcessor that watches `TTSStartedFrame` / `TT
 
 ## Deploy targets
 
-The same agent code runs on **Daily Bots**, **Pipecat Cloud**, **Modal**, your own k8s, or a single VM — Pipecat is transport-agnostic. The hidden-bot session lives on SAA's infrastructure regardless.
+The same agent code runs on:
+
+- **Pipecat Cloud** (`pipecat.daily.co`). Put the auto-provisioned Daily REST key (from Settings -> Daily (WebRTC) tab) in `DAILY_API_KEY`. Your `pk_...` Pipecat Cloud token is for deploy/manage operations, not for SAA at runtime.
+- **Modal**, **k8s**, your own VM, anywhere `pipecat-ai[daily]` runs. Get the Daily REST key from `dashboard.daily.co -> Developers` (or from Pipecat Cloud Settings -> Daily (WebRTC) tab if that's where your account lives).
+
+The hidden-bot session always lives on SAA's infrastructure regardless of where your Pipecat bot runs.
