@@ -42,9 +42,9 @@ def attention_agent_token(
 
     Permissions are minimum-necessary: `hasPresence=False` (invisible in the
     participant list), `canSend=False` (the bot never publishes media),
-    `canReceive={audio:True, video:True}` (it needs both modalities).
-    `user_id` is fixed to `identity` so concurrent sessions for the same
-    customer get distinct bots.
+    `canReceive.base` lets the bot subscribe to both modalities from every
+    participant. `user_id` is fixed to `identity` so concurrent sessions for
+    the same customer get distinct bots.
 
     Args:
         daily_api_key: Customer's Daily REST API key (bearer credential).
@@ -70,16 +70,16 @@ def attention_agent_token(
             "user_name": identity,
             "user_id": identity,
             "exp": exp,
-            # Verified permission recipe (Daily REST API schema 2026-05):
-            # hasPresence=False hides the bot from the participants list,
-            # canSend=False blocks media publishing, canReceive lets the
-            # bot subscribe to both modalities.
             "permissions": {
                 "hasPresence": False,
                 "canSend": False,
                 "canReceive": {
-                    "audio": True,
-                    "video": True,
+                    "base": {
+                        "audio": True,
+                        "video": True,
+                        "screenAudio": True,
+                        "screenVideo": True,
+                    },
                 },
             },
         },
