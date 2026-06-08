@@ -181,9 +181,10 @@ and Pipecat Cloud. No extra deployment knobs.
 
 ## Requirements
 
-- Python 3.10+
+- Python **3.11+** (pipecat-ai 1.x dropped 3.10 support)
 - `pipecat-ai[daily] >= 1.0.0`
 - `daily-python >= 0.19.0`
+- **macOS / Linux / WSL2 only** — daily-python ships no Windows wheels.
 - Daily room URL must be publicly reachable from our cloud (no private VPC)
 - Audio + video tracks must both be available (the model is multimodal)
 - Customer voice agent and hosted attention bot share the same Daily room

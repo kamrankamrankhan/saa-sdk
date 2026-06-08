@@ -79,6 +79,8 @@ def attention_agent_token(
                         "video": True,
                         "screenAudio": True,
                         "screenVideo": True,
+                        "customAudio": True,
+                        "customVideo": True,
                     },
                 },
             },
