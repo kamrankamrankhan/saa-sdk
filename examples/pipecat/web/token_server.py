@@ -1,10 +1,4 @@
 # All-in-one dev /session endpoint for the SAA + Daily web demo — NOT for production
-# Creates an ephemeral Daily room, mints user + bot meeting tokens, summons
-# the hidden SAA agent, and (when provider keys are present) spawns a Pipecat
-# voice agent into the same room so the demo talks back end-to-end.
-#
-# The SAA API key and Daily API key stay server-side; the browser only
-# receives the Daily room URL + its own user meeting token.
 import asyncio
 import logging
 import os
@@ -23,9 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 DAILY_API = "https://api.daily.co/v1"
 
-# Provider keys for the optional in-process voice agent.
-# Needed to run the voice_agent
-VOICE_AGENT_PROVIDER_KEYS = ("OPENAI_API_KEY", "DEEPGRAM_API_KEY", "CARTESIA_API_KEY")
+VOICE_AGENT_PROVIDER_KEYS = ("OPENAI_API_KEY",)
 
 def _voice_agent_enabled() -> tuple[bool, list[str]]:
     missing = [k for k in VOICE_AGENT_PROVIDER_KEYS if not os.environ.get(k)]
@@ -41,8 +33,6 @@ app.add_middleware(
 )
 
 
-# Running voice-agent tasks keyed by room name, so the shutdown hook can
-# cancel them
 _agent_tasks: dict[str, asyncio.Task] = {}
 
 
@@ -50,16 +40,10 @@ _agent_tasks: dict[str, asyncio.Task] = {}
 async def _log_mode() -> None:
     enabled, missing = _voice_agent_enabled()
     if enabled:
-        logger.info(
-            "Voice agent ENABLED — each /session will spawn a Pipecat bot "
-            "(Silero VAD -> Deepgram -> OpenAI -> Cartesia)",
-        )
+        logger.info("Voice agent ENABLED (OpenAI Realtime)")
     else:
         logger.warning(
-            "Voice agent DISABLED — missing env vars: %s. "
-            "The demo will run in overlay-only mode (SAA predictions render in "
-            "the browser, but no agent talks back). Add the missing keys to "
-            ".env to enable talkback.",
+            "Voice agent DISABLED — missing %s; overlay-only mode",
             ", ".join(missing),
         )
 
@@ -114,8 +98,6 @@ def _daily_key_fingerprint() -> str:
 
 
 def _daily_credential_hint() -> str:
-    """Pattern-match the configured DAILY_API_KEY against common look-alikes
-    so a 401 tells the user *which* wrong credential they likely supplied."""
     key = os.environ.get("DAILY_API_KEY") or ""
     if not key:
         return "DAILY_API_KEY is empty."
@@ -136,7 +118,6 @@ def _daily_credential_hint() -> str:
 
 
 async def _create_daily_room() -> dict:
-    # ephemeral room that auto-expires 1h out, dev-only
     name = f"saa-demo-{int(time.time())}"
     exp = int(time.time()) + 3600
     async with httpx.AsyncClient(timeout=20.0) as http:
@@ -157,8 +138,6 @@ async def _create_daily_room() -> dict:
 
 
 def _daily_error_detail(action: str, resp: httpx.Response) -> str:
-    """Tester-friendly error message for any non-2xx from api.daily.co.
-    """
     body = resp.text
     if resp.status_code in (400, 401):
         return (
@@ -175,8 +154,6 @@ def _daily_error_detail(action: str, resp: httpx.Response) -> str:
 async def _mint_meeting_token(
     room_name: str, user_name: str, *, is_owner: bool = False,
 ) -> str:
-    # Normal-user meeting token (full canSend, visible in participant list).
-    # The voice agent gets is_owner=True
     async with httpx.AsyncClient(timeout=20.0) as http:
         r = await http.post(
             f"{DAILY_API}/meeting-tokens",
@@ -198,13 +175,7 @@ async def _mint_meeting_token(
 async def _spawn_voice_agent(
     *, room_url: str, bot_token: str, saa_agent_identity: str, room_name: str,
 ) -> None:
-    """Start the embedded Pipecat voice agent as a background asyncio task.
-
-    Lazy-imports the agent module so an env without pipecat-ai installed can
-    still serve the overlay-only path. Failures are logged but do NOT raise
-    from /session — the browser still gets a working overlay even if the
-    talkback bot crashes at construction time.
-    """
+    # lazy import so the overlay-only path works without pipecat-ai installed
     try:
         from voice_agent import run_voice_agent
     except Exception:
@@ -221,8 +192,6 @@ async def _spawn_voice_agent(
                 bot_token=bot_token,
                 saa_agent_identity=saa_agent_identity,
                 openai_api_key=os.environ["OPENAI_API_KEY"],
-                deepgram_api_key=os.environ["DEEPGRAM_API_KEY"],
-                cartesia_api_key=os.environ["CARTESIA_API_KEY"],
             )
         except asyncio.CancelledError:
             raise
@@ -238,7 +207,6 @@ async def _spawn_voice_agent(
 
 @app.get("/session")
 async def session(room: Optional[str] = None) -> dict:
-    # Use the named room if pinned, otherwise spin up a fresh ephemeral one.
     if room:
         room_name = room
         domain = os.environ.get("DAILY_DOMAIN")
@@ -250,21 +218,16 @@ async def session(room: Optional[str] = None) -> dict:
         room_name = info["name"]
         room_url = info["url"]
 
-    # Single identity, used for both the meeting token and the SAA bot's
-    # target lookup. The SAA bot matches against participant["info"]["userName"]
-    # which is what the meeting token's user_name resolves to on the daily-js
-    # side.
+    # SAA bot matches the human via participant["info"]["userName"], which
+    # is the meeting token's user_name field — reuse the same string for both
     human_identity = f"user-{int(time.time())}"
     user_token = await _mint_meeting_token(room_name, human_identity)
 
-    # Hidden SAA bot meeting token, minted with OUR Daily API key.
-    # In production the customer mints this with their own key.
     saa_agent_token = attention_agent_token(
         daily_api_key=os.environ["DAILY_API_KEY"],
         room_name=room_name,
     )
 
-    # Summon the hidden SAA bot into the room.
     handle = await start_attention_session(
         api_key=os.environ["SAA_API_KEY"],
         room_url=room_url,
@@ -272,7 +235,6 @@ async def session(room: Optional[str] = None) -> dict:
         participant_identity=human_identity,
     )
 
-    # Optional in-process voice agent. Spawns iff all provider keys are set.
     enabled, missing = _voice_agent_enabled()
     if enabled:
         bot_token = await _mint_meeting_token(
@@ -296,6 +258,5 @@ async def session(room: Optional[str] = None) -> dict:
     }
 
 
-# serve index.html + app.js + styles.css from the same origin
-# (declared after /session so the route resolves first)
+# mounted after /session so the route resolves first
 app.mount("/", StaticFiles(directory=os.path.dirname(__file__), html=True), name="static")

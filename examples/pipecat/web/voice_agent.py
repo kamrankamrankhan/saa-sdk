@@ -1,20 +1,6 @@
-"""Embedded SAA-gated voice agent for the web demo.
+"""SAA-gated OpenAI Realtime voice agent for the web demo.
 
-A reusable `run_voice_agent(...)` coroutine that joins a Daily room as the
-talkback agent and lets SAA gate STT. The standalone reference shape lives in
-`examples/pipecat/voice_agent_cascaded/src/agent.py` — this is the same logic
-factored into a function that token_server.py can spawn per /session call so a
-tester gets the full overlay + talkback experience from a single `uvicorn`
-process.
-
-Differences from the standalone agent:
-  * Takes the SAA `agent_identity` as an argument — token_server.py already
-    called `start_attention_session(...)` before this coroutine runs, so the
-    agent doesn't re-mint a session.
-  * Takes provider keys as arguments rather than reading env directly, so
-    failures are caught at startup not in the middle of a /session call.
-  * No `__main__` entrypoint — invoked via `asyncio.create_task` from
-    token_server.py.
+One-key talkback. Cascaded variant lives in `../voice_agent_cascaded/`.
 """
 from __future__ import annotations
 
@@ -22,21 +8,11 @@ import asyncio
 import logging
 from typing import Optional
 
-# Pipecat 1.x canonical import paths. Same set as the standalone agent —
-# see voice_agent_cascaded/src/agent.py for the rationale.
 from pipecat.transports.daily.transport import DailyTransport, DailyParams
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.task import PipelineTask
 from pipecat.pipeline.runner import PipelineRunner
-from pipecat.services.deepgram.stt import DeepgramSTTService
-from pipecat.services.openai.llm import OpenAILLMService
-from pipecat.services.cartesia.tts import CartesiaTTSService
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.processors.aggregators.llm_context import LLMContext
-from pipecat.processors.aggregators.llm_response_universal import (
-    LLMContextAggregatorPair,
-    LLMUserAggregatorParams,
-)
+from pipecat.services.openai.realtime import OpenAIRealtimeLLMService
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.frames.frames import (
     Frame,
@@ -51,10 +27,10 @@ from saa_pipecat_client import AttentionEngine
 
 logger = logging.getLogger("web.voice_agent")
 
+OPENAI_REALTIME_SAMPLE_RATE = 24000
+
 
 class _AddresseeGate(FrameProcessor):
-    """Drops user audio when SAA says the user is talking to another human."""
-
     def __init__(self) -> None:
         super().__init__()
         self.suppressed = False
@@ -67,8 +43,6 @@ class _AddresseeGate(FrameProcessor):
 
 
 class _BotSpeakingObserver(FrameProcessor):
-    """Bridges TTS lifecycle frames to SAA's responding_start/stop."""
-
     def __init__(self) -> None:
         super().__init__()
         self._engine: Optional[AttentionEngine] = None
@@ -92,16 +66,9 @@ async def run_voice_agent(
     bot_token: str,
     saa_agent_identity: str,
     openai_api_key: str,
-    deepgram_api_key: str,
-    cartesia_api_key: str,
+    model: str = "gpt-realtime",
     system_prompt: str = "You are a helpful voice assistant. Keep replies short and natural.",
 ) -> None:
-    """Join `room_url` as a talkback voice agent and let SAA gate STT.
-
-    Returns when the human leaves the room or the pipeline task is cancelled.
-    Exceptions inside the pipeline propagate; the caller (token_server.py)
-    logs them and reaps the task.
-    """
     transport = DailyTransport(
         room_url,
         bot_token,
@@ -110,21 +77,18 @@ async def run_voice_agent(
             audio_in_enabled=True,
             audio_in_user_tracks=True,
             video_in_enabled=True,
-            audio_in_sample_rate=16000,
+            audio_in_sample_rate=OPENAI_REALTIME_SAMPLE_RATE,
             audio_out_enabled=True,
-            audio_out_sample_rate=24000,
+            audio_out_sample_rate=OPENAI_REALTIME_SAMPLE_RATE,
         ),
     )
 
-    stt = DeepgramSTTService(api_key=deepgram_api_key, model="nova-3")
-    llm = OpenAILLMService(api_key=openai_api_key, model="gpt-4o-mini")
-    tts = CartesiaTTSService(api_key=cartesia_api_key, model="sonic-2")
-
-    context = LLMContext(messages=[{"role": "system", "content": system_prompt}])
-    context_aggregator = LLMContextAggregatorPair(
-        context,
-        user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+    realtime = OpenAIRealtimeLLMService(
+        api_key=openai_api_key,
+        settings=OpenAIRealtimeLLMService.Settings(model=model),
     )
+    # Realtime tracks history server-side; no context aggregator needed
+    realtime.set_messages([{"role": "system", "content": system_prompt}])
 
     addressee_gate = _AddresseeGate()
     bot_speaking = _BotSpeakingObserver()
@@ -133,19 +97,13 @@ async def run_voice_agent(
         [
             transport.input(),
             addressee_gate,
-            stt,
-            context_aggregator.user(),
-            llm,
-            tts,
+            realtime,
             bot_speaking,
             transport.output(),
-            context_aggregator.assistant(),
         ]
     )
     task = PipelineTask(pipeline)
 
-    # SAA hosted session was already started by token_server.py; we only need
-    # its agent_identity to construct the engine.
     engine = AttentionEngine(transport, agent_identity=saa_agent_identity)
     engine.bind_task(task)
     bot_speaking.bind_engine(engine)
@@ -179,19 +137,14 @@ async def run_voice_agent(
 
     @transport.event_handler("on_first_participant_joined")
     async def _on_first_participant_joined(transport_, participant):
-        # Engine is already bound; start it now so we don't miss the first
-        # `started` envelope from the SAA bot (which may have joined first).
         await engine.start()
         logger.info(
-            "SAA gating active for room=%s (saa_agent=%s)",
-            room_url, saa_agent_identity,
+            "SAA gating active for room=%s (saa_agent=%s, model=%s)",
+            room_url, saa_agent_identity, model,
         )
 
     @transport.event_handler("on_participant_left")
     async def _on_participant_left(transport_, participant, reason):
-        # When the human leaves, drain and exit. The SAA hosted session is
-        # owned by token_server.py — it stays alive until token_server.py
-        # explicitly tears it down (or the broker reaps it on idle).
         user_name = participant.get("info", {}).get("userName")
         if user_name and user_name.startswith("user-"):
             logger.info(
