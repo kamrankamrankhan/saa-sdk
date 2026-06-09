@@ -67,7 +67,7 @@ async def run_voice_agent(
     bot_token: str,
     saa_agent_identity: str,
     openai_api_key: str,
-    model: str = "gpt-realtime",
+    model: str = "gpt-realtime-2",
     system_prompt: str = "You are a helpful voice assistant. Keep replies short and natural.",
 ) -> None:
     transport = DailyTransport(
@@ -86,10 +86,11 @@ async def run_voice_agent(
 
     realtime = OpenAIRealtimeLLMService(
         api_key=openai_api_key,
-        settings=OpenAIRealtimeLLMService.Settings(model=model),
+        settings=OpenAIRealtimeLLMService.Settings(
+            model=model,
+            system_instruction=system_prompt,
+        ),
     )
-    # Realtime tracks history server-side; no context aggregator needed
-    realtime.set_messages([{"role": "system", "content": system_prompt}])
 
     addressee_gate = _AddresseeGate()
     bot_speaking = _BotSpeakingObserver()
