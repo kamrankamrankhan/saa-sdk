@@ -41,6 +41,7 @@ async function start() {
       throw new Error(`/session ${resp.status}: ${body}`);
     }
     payload = await resp.json();
+    console.log("[saa] /session ok", payload);
   } catch (e) {
     setStatus("error: /session failed");
     showError(
@@ -63,6 +64,9 @@ async function start() {
   }
   agentIdentity = agent_identity;
   agentSessionId = null;
+  console.log(
+    "[saa] connecting", { room_url, agent_identity, voice_agent_enabled },
+  );
 
   // Surface whether the voice agent is enabled this session saves a
   // tester from wondering why nothing's talking back.
@@ -108,6 +112,7 @@ async function start() {
   }
   setStatus("connected");
   clearError();
+  console.log("[saa] joined room, waiting for bot on topic:", SAA_TOPIC);
 
   // resolve agent session_id in case it's already in the room
   resolveAgentSessionId();
@@ -161,6 +166,7 @@ function resolveAgentSessionId() {
     if (p?.local) continue;
     if (p?.user_name === agentIdentity) {
       agentSessionId = p.session_id ?? sid;
+      console.log("[saa] bot resolved, session_id:", agentSessionId);
       return;
     }
   }
@@ -176,6 +182,7 @@ function onAppMessage({ data, fromId }) {
 
   switch (data.type) {
     case "started":
+      console.log("[saa] started", data);
       setStatus("started");
       break;
     case "prediction":
@@ -185,6 +192,7 @@ function onAppMessage({ data, fromId }) {
       renderVAD(data);
       break;
     case "state":
+      console.log("[saa] state:", data.state);
       setStatus(data.state);
       break;
     case "turn_ready":
@@ -277,15 +285,30 @@ function b64ToBytes(b64) {
 
 const LABELS = { 0: "silent", 1: "human ↔ human", 2: "talking to me" };
 
+// log only on transitions — predictions/VAD arrive every 250ms
+let _lastClass = null;
+let _lastVad = null;
+
 function renderPrediction(p) {
   document.getElementById("class-label").textContent = LABELS[p.aligned_class] ?? "?";
   document.getElementById("conf-fill").style.width = `${(p.confidence * 100).toFixed(0)}%`;
   document.getElementById("faces").textContent = `faces: ${p.num_faces}`;
   document.getElementById("prediction").dataset.class = String(p.aligned_class);
+  if (p.aligned_class !== _lastClass) {
+    console.log(
+      `[saa] prediction → ${p.aligned_class} (${LABELS[p.aligned_class] ?? "?"})`,
+      `conf=${p.confidence?.toFixed(2)} faces=${p.num_faces}`,
+    );
+    _lastClass = p.aligned_class;
+  }
 }
 
 function renderVAD(v) {
   document.getElementById("vad").textContent = `VAD: ${v.is_speech ? "on" : "off"}`;
+  if (v.is_speech !== _lastVad) {
+    console.log(`[saa] vad → ${v.is_speech ? "speech" : "silence"}`);
+    _lastVad = v.is_speech;
+  }
 }
 
 function setStatus(s) {
@@ -316,6 +339,9 @@ async function stop() {
   agentIdentity = null;
   agentSessionId = null;
   pending.clear();
+  _lastClass = null;
+  _lastVad = null;
+  console.log("[saa] disconnected");
   setStatus("disconnected");
   document.getElementById("btn-start").disabled = false;
   document.getElementById("btn-stop").disabled = true;
