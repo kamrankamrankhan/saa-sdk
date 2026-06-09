@@ -93,6 +93,7 @@ async function start() {
 
   call.on("app-message", onAppMessage);
   call.on("track-started", onTrackStarted);
+  call.on("track-stopped", onTrackStopped);
   call.on("participant-joined", onParticipantJoined);
   call.on("participant-updated", onParticipantUpdated);
   call.on("left-meeting", () => setStatus("disconnected"));
@@ -144,10 +145,40 @@ function clearError() {
 }
 
 function onTrackStarted(ev) {
-  if (!ev.participant?.local) return;
-  if (ev.track?.kind !== "video") return;
-  const el = document.getElementById("local-video");
-  el.srcObject = new MediaStream([ev.track]);
+  // Local video → self-preview.
+  if (ev.participant?.local) {
+    if (ev.track?.kind === "video") {
+      document.getElementById("local-video").srcObject = new MediaStream([ev.track]);
+    }
+    return;
+  }
+  // Remote audio Daily call-object mode does NOT auto-play
+  // attach the track to an <audio autoplay> element
+  if (ev.track?.kind === "audio") {
+    attachRemoteAudio(ev.participant?.session_id, ev.track);
+  }
+}
+
+function attachRemoteAudio(sid, track) {
+  const id = `remote-audio-${sid || "unknown"}`;
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement("audio");
+    el.id = id;
+    el.autoplay = true;
+    el.playsInline = true;
+    document.body.appendChild(el);
+  }
+  el.srcObject = new MediaStream([track]);
+  const p = el.play?.();
+  if (p?.catch) p.catch((e) => console.warn("[saa] remote audio play() blocked:", e.message));
+  console.log("[saa] attached remote audio from", sid);
+}
+
+function onTrackStopped(ev) {
+  if (ev.track?.kind !== "audio") return;
+  const el = document.getElementById(`remote-audio-${ev.participant?.session_id || "unknown"}`);
+  if (el) el.remove();
 }
 
 function onParticipantJoined(_ev) {
@@ -344,6 +375,8 @@ async function stop() {
   pending.clear();
   _lastClass = null;
   _lastVad = null;
+  // tear down any remote-audio elements we created for the voice agent
+  document.querySelectorAll("audio[id^='remote-audio-']").forEach((el) => el.remove());
   console.log("[saa] disconnected");
   setStatus("disconnected");
   document.getElementById("btn-start").disabled = false;
