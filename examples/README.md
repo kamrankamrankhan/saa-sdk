@@ -53,7 +53,7 @@ Needs **attenlabs-saa >= 0.4.0** (the `feed_audio` API) and **elevenlabs >= 2.45
 
 ## Conventions
 
-- `ATTENLABS_TOKEN` is the streaming-SDK auth token; `SAA_API_KEY` is the hosted-bridge key (shared between LiveKit and Pipecat). Get one at [attentionlabs.ai](https://attentionlabs.ai).
+- `SAA_API_KEY` is your Attention Labs API key — the same credential for both the streaming SDK and the hosted bridge (LiveKit and Pipecat). Get one at [attentionlabs.ai](https://attentionlabs.ai).
 - LiveKit samples additionally need `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, plus per-sample provider keys. See each sample's `.env.example`.
 - Pipecat samples need `DAILY_API_KEY` (Daily REST, customer-owned — mints the hidden-bot meeting token locally; never seen by our broker), plus a `DAILY_ROOM_URL` + bot meeting token for the cascaded sample, plus per-sample provider keys.
 

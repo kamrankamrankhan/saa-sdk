@@ -12,7 +12,7 @@ Single file ([`agent.py`](./agent.py)). The moving parts:
 - `output()` / `interrupt()` → `saa.mark_responding(True/False)` (via a short idle watchdog, since ElevenLabs has no clean end-of-turn callback) — so SAA knows when the agent itself is speaking.
 
 ```python
-saa = AttentionClient(token=ATTENLABS_TOKEN, enable_audio=False, enable_video=False)
+saa = AttentionClient(token=SAA_API_KEY, enable_audio=False, enable_video=False)
 attn = SAAFeedAudioInterface(DefaultAudioInterface(), saa, gate=True)
 
 @saa.on_prediction
@@ -27,7 +27,7 @@ conversation.start_session()
 
 ```bash
 cd examples/elevenlabs
-cp .env.example .env     # fill ATTENLABS_TOKEN, ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID
+cp .env.example .env     # fill SAA_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID
 
 cd voice_agent
 python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate

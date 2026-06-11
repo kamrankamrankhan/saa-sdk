@@ -40,7 +40,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     # Summon the saa hosted agent into the room.
     session = await start_attention_session(
-        api_key=os.environ["saa_API_KEY"],
+        api_key=os.environ["SAA_API_KEY"],
         livekit_url=os.environ["LIVEKIT_URL"],
         agent_token=agent_token,
         room_name=ctx.room.name,
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
 ```
 
-Environment: `saa_API_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL`.
+Environment: `SAA_API_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL`.
 
 ## Event types
 

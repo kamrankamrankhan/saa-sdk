@@ -117,16 +117,16 @@ class SAAFeedAudioInterface(AudioInterface):
 
 
 def main() -> int:
-    token = os.environ.get("ATTENLABS_TOKEN")
+    saa_api_key = os.environ.get("SAA_API_KEY")
     api_key = os.environ.get("ELEVENLABS_API_KEY")
     agent_id = os.environ.get("ELEVENLABS_AGENT_ID")
-    if not (token and api_key and agent_id):
-        print("set ATTENLABS_TOKEN, ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID")
+    if not (saa_api_key and api_key and agent_id):
+        print("set SAA_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID")
         return 2
 
     # streaming SDK in feed mode — no self-capture; we feed the ElevenLabs tap.
     # audio-only: ElevenLabs gives no video, so SAA runs on audio alone.
-    saa = AttentionClient(token=token, enable_audio=False, enable_video=False)
+    saa = AttentionClient(token=saa_api_key, enable_audio=False, enable_video=False)
     attn = SAAFeedAudioInterface(DefaultAudioInterface(), saa, gate=True)
 
     @saa.on_prediction

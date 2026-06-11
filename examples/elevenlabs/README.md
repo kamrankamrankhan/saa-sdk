@@ -25,7 +25,7 @@ Needs **Python 3.10+** and an ElevenLabs agent ID.
 
 ```bash
 cd examples/elevenlabs
-cp .env.example .env     # fill ATTENLABS_TOKEN, ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID
+cp .env.example .env     # fill SAA_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID
 
 cd voice_agent
 python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
@@ -39,7 +39,7 @@ The sample **auto-loads** `examples/elevenlabs/.env`, so the command is identica
 ## The lines that integrate SAA
 
 ```python
-saa = AttentionClient(token=ATTENLABS_TOKEN, enable_audio=False, enable_video=False)
+saa = AttentionClient(token=SAA_API_KEY, enable_audio=False, enable_video=False)
 attn = SAAFeedAudioInterface(DefaultAudioInterface(), saa, gate=True)   # tee + feed_audio + gate
 
 @saa.on_prediction
@@ -57,7 +57,7 @@ One env file — [`.env`](./.env.example) in this directory:
 
 | Key | Purpose |
 |---|---|
-| `ATTENLABS_TOKEN` | SAA **streaming-SDK** token (not the hosted-bridge `SAA_API_KEY`). Get one at [attentionlabs.ai/dashboard](https://attentionlabs.ai/dashboard). |
+| `SAA_API_KEY` | Your Attention Labs API key. Get one at [attentionlabs.ai/dashboard](https://attentionlabs.ai/dashboard). |
 | `ELEVENLABS_API_KEY` | ElevenLabs API key |
 | `ELEVENLABS_AGENT_ID` | The agent to talk to |
 
