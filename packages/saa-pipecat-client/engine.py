@@ -388,6 +388,7 @@ class AttentionEngine:
             confidence=float(env.get("confidence") or 0.0),
             source=env.get("source", "model"),
             num_faces=int(env.get("num_faces", 0)),
+            responding=bool(env.get("responding", env.get("source") == "ai_responding")),
         )
         self._latest_prediction = ev
         if self._cb_prediction is not None:
