@@ -109,8 +109,9 @@ function onData(payload, _participant, _kind, topic) {
     return;
   }
   switch (msg.type) {
-    // `started` is the native warmup-complete pivot — the model is ready
-    case "started": setWarming(false); setStatus("SAA ready"); break;
+    // `started` = model loaded, keep  "warming up"
+    // until the first real prediction 
+    case "started": setStatus("warming up…"); break;
     case "prediction": renderPrediction(msg); break;
     case "vad": renderVAD(msg); break;
     case "state": setStatus(msg.state); break;
@@ -168,8 +169,9 @@ function setWarming(on) {
 }
 
 function renderPrediction(p) {
-  // first real prediction means the model is live — drop the warming state
+  // first real prediction means inference is live — drop the warming state
   const el = document.getElementById("prediction");
+  if (el.dataset.warming === "true") setStatus("live");
   el.dataset.warming = "false";
   // prefer the canonical polished display_class; fall back to aligned_class
   const cls = p.display_class ?? p.aligned_class;

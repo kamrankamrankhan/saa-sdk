@@ -116,6 +116,9 @@ async function start() {
   }
   setStatus("connected");
   clearError();
+  // SAA warms its model once summoned; show that on the card until the first
+  // real prediction lands.
+  setWarming(true);
   console.log("[saa] joined room, waiting for bot on topic:", SAA_TOPIC);
 
   // resolve agent session_id in case it's already in the room
@@ -216,9 +219,10 @@ function onAppMessage({ data, fromId }) {
 
   switch (data.type) {
     case "started":
-      // native warmup-complete pivot — the model is ready
-      console.log("[saa] warmed up", data);
-      setStatus("SAA ready");
+      // `started` = model loaded, keep  "warming up"
+      // until the first real prediction
+      console.log("[saa] model loaded", data);
+      setStatus("warming up…");
       break;
     case "prediction":
       renderPrediction(data);
@@ -325,7 +329,27 @@ let _lastClass = null;
 let _lastResponding = null;
 let _lastVad = null;
 
+// show "warming up" state on the prediction card until inference is actually
+// live (first prediction)
+function setWarming(on) {
+  const el = document.getElementById("prediction");
+  el.dataset.warming = String(on);
+  if (on) {
+    el.dataset.class = "0";
+    el.dataset.responding = "false";
+    document.getElementById("class-label").textContent = "warming up";
+    document.getElementById("conf-fill").style.width = ""; // let the CSS sweep show
+  } else {
+    document.getElementById("class-label").textContent = "—";
+    document.getElementById("conf-fill").style.width = "0%";
+  }
+}
+
 function renderPrediction(p) {
+  // first real prediction means inference is live — drop the warming state
+  const el = document.getElementById("prediction");
+  if (el.dataset.warming === "true") setStatus("live");
+  el.dataset.warming = "false";
   // prefer the canonical polished display_class; fall back to aligned_class
   const cls = p.display_class ?? p.aligned_class;
   // native AI-responding flag; older servers signal it via source instead
@@ -335,7 +359,6 @@ function renderPrediction(p) {
   document.getElementById("class-label").textContent = label;
   document.getElementById("conf-fill").style.width = `${(p.confidence * 100).toFixed(0)}%`;
   document.getElementById("faces").textContent = `faces: ${p.num_faces}`;
-  const el = document.getElementById("prediction");
   el.dataset.class = String(cls);
   el.dataset.responding = String(responding);
   if (cls !== _lastClass || responding !== _lastResponding) {
@@ -385,7 +408,15 @@ async function stop() {
   agentSessionId = null;
   pending.clear();
   _lastClass = null;
+  _lastResponding = null;
   _lastVad = null;
+  // reset the prediction card to its idle look
+  const pred = document.getElementById("prediction");
+  pred.dataset.warming = "false";
+  pred.dataset.responding = "false";
+  pred.dataset.class = "0";
+  document.getElementById("class-label").textContent = "--";
+  document.getElementById("conf-fill").style.width = "0%";
   // tear down any remote-audio elements we created for the voice agent
   document.querySelectorAll("audio[id^='remote-audio-']").forEach((el) => el.remove());
   console.log("[saa] disconnected");
