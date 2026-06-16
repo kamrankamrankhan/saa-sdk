@@ -119,13 +119,15 @@ class SAAFeedAudioInterface(AudioInterface):
 
     # ── internals ───────────────────────────────────────────────────────
     def _tee(self, audio: bytes):
-        # feed SAA continuously (it must see every frame to classify), but only
-        # forward to ElevenLabs when SAA says the speech is device-directed
+        # always feed SAA (it classifies every frame; mark_responding marks the
+        # agent's own playback). Forward to ElevenLabs only when the gate is open
+        # AND the agent isn't speaking — otherwise the mic picks up the agent's
+        # own greeting/reply (no AEC here) and feeds it back, so it answers itself.
         try:
             self._saa.feed_audio(audio)
         except Exception:
             logger.exception("feed_audio failed")
-        if self._gate_open and self._user_cb is not None:
+        if self._gate_open and not self._responding and self._user_cb is not None:
             self._user_cb(audio)
 
     def _set_responding(self, value: bool):
