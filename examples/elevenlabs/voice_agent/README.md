@@ -11,16 +11,33 @@ Single file ([`agent.py`](./agent.py)). The moving parts:
 - `@saa.on_prediction` → `attn.set_gate_open(ev.cls == 2)` -> **the gate**. Direct analog of the LiveKit realtime sample's `session.input.set_audio_enabled(p.aligned_class == 2)`: only device-directed speech reaches the agent.
 - `output()` / `interrupt()` → `saa.mark_responding(True/False)` (via a short idle watchdog, since ElevenLabs has no clean end-of-turn callback) — so SAA knows when the agent itself is speaking.
 
+### Warmup-gated greeting
+
+SAA's model isn't classifying for real until its inference buffer fills (~10–15 s of audio). If the agent greeted immediately, it would speak into a cold classifier and the gate would be unreliable on the user's first reply. So:
+
+- `attn.prime()` starts the mic feeding SAA *before* the ElevenLabs session connects — SAA warms up on real audio while the agent stays silent (gate closed, nothing forwarded yet).
+- `@saa.on_warmup_complete` is SAA's **native** "warmed up + predicting" signal (first real prediction). The agent's `start_session()` (which triggers the greeting) is held until it fires — with a 20 s timeout fallback so a SAA stall still lets the agent greet.
+
+The payoff: the agent greets only once SAA is live, and because SAA is already warm, the fail-closed gate works correctly from the very first user turn.
+
 ```python
 saa = AttentionClient(token=SAA_API_KEY, enable_audio=False, enable_video=False)
 attn = SAAFeedAudioInterface(DefaultAudioInterface(), saa, gate=True)
+
+warmed = threading.Event()
+
+@saa.on_warmup_complete
+def _(): warmed.set()                             # native SAA warmup pivot
 
 @saa.on_prediction
 def _(ev): attn.set_gate_open(ev.cls == 2)        # the gate
 
 conversation = Conversation(client=ElevenLabs(...), agent_id=..., requires_auth=True, audio_interface=attn)
-saa.start()                                       # feed_audio live before the mic tee starts
-conversation.start_session()
+
+saa.start()
+attn.prime()                                      # warm SAA on real audio first
+warmed.wait(timeout=20.0)
+conversation.start_session()                      # greet into an already-warm SAA
 ```
 
 ## Quickstart

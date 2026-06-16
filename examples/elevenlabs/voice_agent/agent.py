@@ -6,6 +6,10 @@
 # feeds the user mic to the SAA cloud via attenlabs-saa's feed_audio(), and
 # gates the agent by only forwarding device-directed audio onward. The SAA
 # classifier runs on Attention Labs' infra; no model ships here.
+#
+# Warmup: SAA's native on_warmup_complete fires once its model is classifying
+# for real (inference buffer filled from real audio). We prime() the mic so SAA warms on real
+# audio, then hold the agent's greeting until that signal
 import logging
 import os
 import threading
@@ -46,6 +50,7 @@ class SAAFeedAudioInterface(AudioInterface):
         # when gating, start closed and open on the first device-directed tick
         self._gate_open = not gate
         self._user_cb = None
+        self._primed = False
         self._responding_idle_s = responding_idle_ms / 1000.0
         self._responding = False
         self._last_output_ts = 0.0
@@ -57,12 +62,31 @@ class SAAFeedAudioInterface(AudioInterface):
     def set_gate_open(self, is_open: bool) -> None:
         self._gate_open = is_open
 
-    # ── AudioInterface contract ─────────────────────────────────────────
-    def start(self, input_callback):
-        self._user_cb = input_callback
+    # ── warmup priming ───────────────────────────────────────────────────
+    def prime(self) -> None:
+        """Start the mic feeding SAA *before* the ElevenLabs session connects.
+
+        SAA's native warmup (on_warmup_complete) only fires once the model's
+        inference buffer has filled from real audio which needs frames
+        flowing.
+        """
+        if self._primed:
+            return
+        self._primed = True
+        self._start_watchdog()
+        self._base.start(self._tee)
+
+    def _start_watchdog(self) -> None:
         self._wd_stop.clear()
         self._wd = threading.Thread(target=self._watchdog, name="saa-responding", daemon=True)
         self._wd.start()
+
+    # ── AudioInterface contract ─────────────────────────────────────────
+    def start(self, input_callback):
+        self._user_cb = input_callback
+        if self._primed:
+            return  # mic already running from prime(); just attach the callback
+        self._start_watchdog()
         self._base.start(self._tee)
 
     def stop(self):
@@ -129,6 +153,15 @@ def main() -> int:
     saa = AttentionClient(token=saa_api_key, enable_audio=False, enable_video=False)
     attn = SAAFeedAudioInterface(DefaultAudioInterface(), saa, gate=True)
 
+    warmed = threading.Event()
+
+    @saa.on_warmup_complete
+    def _():
+        # the model has filled its inference buffer and is
+        # producing real predictions. Gate the greeting on this so the agent
+        # only speaks once SAA is actually classifying.
+        warmed.set()
+
     @saa.on_prediction
     def _(ev):
         # the gate: only device-directed speech (class 2) reaches the agent.
@@ -153,8 +186,15 @@ def main() -> int:
         callback_user_transcript=lambda t: print(f"user:  {t}"),
     )
 
-    # SAA first so feed_audio is live before the ElevenLabs mic tee starts
+    # 1) open SAA, 2) prime the mic so SAA warms on real audio, 3) greet only
+    #    once SAA's native warmup fires
     saa.start()
+    attn.prime()
+    print("warming up SAA model... (this takes ~10-15s)")
+    if not warmed.wait(timeout=20.0):
+        logger.warning("SAA warmup did not complete within 20s — greeting anyway")
+    else:
+        print("SAA warmed up — starting agent")
     conversation.start_session()
     print("SAA-gated ElevenLabs session started — Ctrl+C to end")
     try:
