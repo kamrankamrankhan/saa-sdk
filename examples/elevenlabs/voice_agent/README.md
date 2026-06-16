@@ -7,9 +7,9 @@ An [ElevenLabs Conversational AI](https://elevenlabs.io/docs/eleven-agents/overv
 Single file ([`agent.py`](./agent.py)). The moving parts:
 
 - `AttentionClient(token=..., enable_audio=False, enable_video=False)` -> streaming SDK in **feed mode**: it opens the cloud WebSocket but captures nothing itself.
-- `SAAFeedAudioInterface(DefaultAudioInterface(), saa)` -> wraps ElevenLabs' audio interface. Its mic tee calls `saa.feed_audio(chunk)` for every frame, then forwards to the agent **only when the gate is open**.
+- `SAAFeedAudioInterface(DefaultAudioInterface(), saa)` -> wraps ElevenLabs' audio interface. Its mic tee calls `saa.feed_audio(chunk)` for every frame, then forwards to the agent **only when the gate is open and the agent isn't speaking** — the second half stops the agent's own greeting/reply (picked up by the mic, no AEC) from looping back so it answers itself.
 - `@saa.on_prediction` → `attn.set_gate_open(ev.cls == 2)` -> **the gate**. Direct analog of the LiveKit realtime sample's `session.input.set_audio_enabled(p.aligned_class == 2)`: only device-directed speech reaches the agent.
-- `output()` / `interrupt()` → `saa.mark_responding(True/False)` (via a short idle watchdog, since ElevenLabs has no clean end-of-turn callback) — so SAA knows when the agent itself is speaking.
+- `output()` / `interrupt()` → `saa.mark_responding(True/False)` — so SAA knows when the agent itself is speaking. `responding` is held for the agent TTS's **playback duration** (derived from the queued PCM bytes, +a short tail), because `DefaultAudioInterface` queues `output()` instantly but plays on a background thread; tracking `output()` idle instead would drop `responding` mid-playback and the agent's own echo would leak back.
 
 ### Warmup-gated greeting
 
