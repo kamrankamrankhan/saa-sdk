@@ -23,6 +23,8 @@ from elevenlabs.conversational_ai.default_audio_interface import DefaultAudioInt
 
 from saa import AttentionClient
 
+from tui import TerminalUI
+
 # auto-load the shared examples/elevenlabs/.env
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
@@ -43,7 +45,8 @@ class SAAFeedAudioInterface(AudioInterface):
     """
 
     def __init__(self, base: AudioInterface, saa: AttentionClient, *,
-                 gate: bool = True, responding_idle_ms: int = 500):
+                 gate: bool = True, responding_idle_ms: int = 500,
+                 on_responding=None):
         self._base = base
         self._saa = saa
         self._gate = gate
@@ -51,6 +54,8 @@ class SAAFeedAudioInterface(AudioInterface):
         self._gate_open = not gate
         self._user_cb = None
         self._primed = False
+        # optional fn(bool) notified on responding True/False transitions (TUI)
+        self._on_responding = on_responding
         self._responding_idle_s = responding_idle_ms / 1000.0
         self._responding = False
         self._last_output_ts = 0.0
@@ -97,11 +102,15 @@ class SAAFeedAudioInterface(AudioInterface):
         self._base.stop()
 
     def output(self, audio: bytes):
+        fire = False
         with self._lock:
             self._last_output_ts = time.monotonic()
             if not self._responding:
                 self._responding = True
-                self._saa.mark_responding(True)
+                fire = True
+        if fire:  # notify outside the lock (callbacks may take their own locks)
+            self._saa.mark_responding(True)
+            self._notify_responding(True)
         self._base.output(audio)
 
     def interrupt(self):
@@ -120,11 +129,23 @@ class SAAFeedAudioInterface(AudioInterface):
             self._user_cb(audio)
 
     def _set_responding(self, value: bool):
+        fire = False
         with self._lock:
-            self._last_output_ts = 0.0 if not value else self._last_output_ts
+            if not value:
+                self._last_output_ts = 0.0
             if self._responding != value:
                 self._responding = value
-                self._saa.mark_responding(value)
+                fire = True
+        if fire:
+            self._saa.mark_responding(value)
+            self._notify_responding(value)
+
+    def _notify_responding(self, value: bool):
+        if self._on_responding is not None:
+            try:
+                self._on_responding(value)
+            except Exception:
+                logger.exception("on_responding callback raised")
 
     def _watchdog(self):
         # ElevenLabs has no clean end-of-turn callback in output(); flip
@@ -148,18 +169,22 @@ def main() -> int:
         print("set SAA_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID")
         return 2
 
+    ui = TerminalUI()
+
     # streaming SDK in feed mode — no self-capture; we feed the ElevenLabs tap.
     # audio-only: ElevenLabs gives no video, so SAA runs on audio alone.
     saa = AttentionClient(token=saa_api_key, enable_audio=False, enable_video=False)
-    attn = SAAFeedAudioInterface(DefaultAudioInterface(), saa, gate=True)
+    attn = SAAFeedAudioInterface(DefaultAudioInterface(), saa, gate=True,
+                                 on_responding=ui.set_responding)
 
     warmed = threading.Event()
+    warm_ticks = {"n": 0}
 
     @saa.on_warmup_complete
     def _():
-        # the model has filled its inference buffer and is
-        # producing real predictions. Gate the greeting on this so the agent
-        # only speaks once SAA is actually classifying.
+        # model has filled its inference buffer and is producing real
+        # predictions. Gate the greeting on this so the agent only speaks once
+        # SAA is actually classifying. main() activates the TUI on this signal.
         warmed.set()
 
     @saa.on_prediction
@@ -167,46 +192,55 @@ def main() -> int:
         # the gate: only device-directed speech (class 2) reaches the agent.
         # cls is the server's smoothed/aligned class.
         attn.set_gate_open(ev.cls == 2)
+        if warmed.is_set():
+            ui.update_prediction(ev.cls, ev.confidence)
+            ui.update_gate(ev.cls == 2)
+        else:
+            warm_ticks["n"] += 1
+            if warm_ticks["n"] % 10 == 0:
+                ui.log(f"warming up SAA... ({warm_ticks['n']} ticks)")
 
     @saa.on_interrupt
     def _(ev):
         # informational — ElevenLabs runs its own barge-in detection
-        logger.info("SAA interrupt (conf=%.2f)", ev.confidence)
+        ui.log(f"SAA interrupt (fade={ev.fade_ms}ms conf={ev.confidence:.2f})")
 
     @saa.on_error
     def _(ev):
-        logger.warning("SAA error: %s — %s", ev.title, ev.message)
+        ui.log(f"SAA error: {ev.title}: {ev.message}")
 
     conversation = Conversation(
         client=ElevenLabs(api_key=api_key),
         agent_id=agent_id,
         requires_auth=True,
         audio_interface=attn,
-        callback_agent_response=lambda r: print(f"agent: {r}"),
-        callback_user_transcript=lambda t: print(f"user:  {t}"),
     )
 
-    # 1) open SAA, 2) prime the mic so SAA warms on real audio, 3) greet only
-    #    once SAA's native warmup fires
+    # 1) open SAA, 2) prime the mic so SAA warms on real audio, 3) bring up the
+    #    dashboard and greet — only once SAA's native warmup fires.
     saa.start()
     attn.prime()
-    print("warming up SAA model... (this takes ~10-15s)")
+    ui.log("warming up SAA model... (this takes ~10-15s)")
     if not warmed.wait(timeout=20.0):
-        logger.warning("SAA warmup did not complete within 20s — greeting anyway")
-    else:
-        print("SAA warmed up — starting agent")
+        ui.log("SAA warmup did not complete within 20s — greeting anyway")
+    ui.activate()
     conversation.start_session()
-    print("SAA-gated ElevenLabs session started — Ctrl+C to end")
     try:
         conversation.wait_for_session_end()
     except KeyboardInterrupt:
         pass
     finally:
+        ui.deactivate()
+        print("stopping...")
         conversation.end_session()
         saa.stop()
     return 0
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    # logs go to stderr, which the TUI can't suppress, so keep
+    # them quiet enough not to tear the frame
+    logging.basicConfig(level=logging.WARNING)
+    logging.getLogger("elevenlabs").setLevel(logging.WARNING)
+    logging.getLogger("saa").setLevel(logging.WARNING)
     raise SystemExit(main())

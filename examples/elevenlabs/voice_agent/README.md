@@ -55,6 +55,13 @@ python agent.py
 
 Talk to it. The agent answers only when you're addressing it; speech you direct at another person in the room never reaches the model.
 
+## Terminal dashboard
+
+On a TTY the agent renders a small live status frame ([`tui.py`](./tui.py)) once SAA warms up:
+the current prediction + confidence (MODE), a rolling class buffer (BUFFER), the gate (GATE
+OPEN/CLOSED), and the agent state (AGENT idle / listening / speaking). Without a TTY (piped, CI)
+it no-ops, so the agent still runs headless.
+
 ## Cost note
 
 SAA streaming is billed per session-minute; the ElevenLabs agent is billed by ElevenLabs.
