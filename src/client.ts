@@ -23,6 +23,7 @@ import {
   type AudioPipeline,
   type VideoPipeline,
 } from "./capture.js";
+import { applyServerProfileToWsUrl, allocateBody } from "./url.js";
 
 const WS_PING_INTERVAL_MS = 5000;
 const WS_PONG_TIMEOUT_MS = 15000;
@@ -404,14 +405,20 @@ export class AttentionClient {
   private async resolveWsUrl(): Promise<string> {
     const url = this.opts.url ?? DEFAULT_SERVER_URL;
     if (url.startsWith("ws://") || url.startsWith("wss://")) {
-      return url;
+      //  bake the server_profile into the query (the backend
+      // /ws reads it); precedence handled in applyServerProfileToWsUrl.
+      return applyServerProfileToWsUrl(url, this.opts.serverProfile, this.enableVideo);
     }
     const allocateUrl = `${url.replace(/\/$/, "")}/allocate`;
     const headers: Record<string, string> = {};
     if (this.opts.token) {
       headers["Authorization"] = `Bearer ${this.opts.token}`;
     }
-    const r = await fetch(allocateUrl, { method: "POST", headers });
+    // broker bakes the selector into the wss URL it hands back; empty body =
+    // legacy default profile.
+    const body = allocateBody(this.opts.serverProfile, this.enableVideo);
+    if (body) headers["Content-Type"] = "application/json";
+    const r = await fetch(allocateUrl, { method: "POST", headers, body });
     if (!r.ok) {
       const body = await r.text().catch(() => "");
       throw new Error(

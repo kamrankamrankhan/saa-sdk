@@ -20,6 +20,7 @@ export interface AttentionClientOptions {
   initialThreshold?: number;
   enableAudio?: boolean;
   enableVideo?: boolean;
+  serverProfile?: string;
 }
 
 export interface StartOptions {

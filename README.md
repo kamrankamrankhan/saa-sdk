@@ -42,6 +42,7 @@ await client.start({ videoElement: videoEl });
 | `initialThreshold` | number   | `0.7`                                | Confidence threshold for predictions (0–1). |
 | `enableAudio`      | boolean  | `true`                               | Capture the mic internally. Set `false` to push audio via `feedAudio()`. |
 | `enableVideo`      | boolean  | `true`                               | Capture the camera internally. Set `false` for audio-only or to push frames via `feedVideo()`. |
+| `serverProfile`    | string   | inferred                             | Server processor variant. Defaults to `"audio_only"` when `enableVideo: false`, else the full processor. Pass `"default"` to force the full processor without local video. |
 | `video.width`      | number   | `1920`                               | Capture width. |
 | `video.height`     | number   | `1080`                               | Capture height. |
 | `video.jpegQuality`| number   | `0.6`                                | JPEG quality (0–1). |
