@@ -121,6 +121,7 @@ class AttentionEngine:
         self._cb_interrupt: SyncOrAsync[InterruptEvent] | None = None
         self._cb_interjection: SyncOrAsync[InterjectionEvent] | None = None
         self._cb_error: SyncOrAsync[ErrorEvent] | None = None
+        self._cb_warmup: NullaryCallback | None = None
 
         # State
         self._is_ready = False
@@ -253,6 +254,13 @@ class AttentionEngine:
         self._cb_error = fn
         return fn
 
+    def on_warmup(self, fn: NullaryCallback) -> NullaryCallback:
+        """fn() — fires once when the model is warmed up and producing its
+        first real prediction. Distinct from `is_ready` / `started`, which
+        only mean the session is established and the model is loaded."""
+        self._cb_warmup = fn
+        return fn
+
     # ── Upstream actions (scoped to the hidden bot) ──────────────────────
 
     async def mute(self) -> None:
@@ -373,6 +381,10 @@ class AttentionEngine:
         elif evt_type == "started":
             self._is_ready = True
             self._ready_event.set()
+        elif evt_type == "warmup_complete":
+            # model produced its first real prediction (warmed up + predicting)
+            if self._cb_warmup is not None:
+                _invoke_nullary(self._cb_warmup)
         elif evt_type == "config":
             self._latest_threshold = message.get("model_class2_threshold")
         elif evt_type == "error":
