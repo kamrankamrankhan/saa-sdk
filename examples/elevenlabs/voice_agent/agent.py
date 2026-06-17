@@ -31,9 +31,10 @@ class SAAFeedAudioInterface(AudioInterface):
     """Tees the mic into SAA and feeds ElevenLabs a continuous stream: real audio
     while device-directed, silence otherwise.
 
-    - Gate is debounced: opens on class-2, closes only after `close_debounce_ticks`
-      consecutive non-class-2 ticks — so a pause doesn't chop an utterance and
-      ElevenLabs gets a real trailing-silence tail to endpoint on.
+    - Gate opens on class-2 (device-directed) and closes at once on class-1
+      (human-directed). A class-0 (silence) dip is debounced for
+      `close_debounce_ticks`
+
     - `responding` is tracked by agent-TTS *playback* duration, not output() calls:
       DefaultAudioInterface queues output() instantly but plays on a background
       thread, so output()-idle would flip responding off mid-playback and the
@@ -65,13 +66,15 @@ class SAAFeedAudioInterface(AudioInterface):
     def gate_open(self) -> bool:
         return self._gate_open
 
-    def update_gate(self, device_directed: bool) -> None:
-        # open immediately on device-directed; close only after a short streak of
-        # non-device-directed ticks (debounce) so single class-0 dips don't chop.
-        if device_directed:
+    def update_gate(self, cls: int) -> None:
+        # open on device-directed (2); human-directed (1) closes at once; a
+        # class-0 (silence) dip is debounced so a pause mid-utterance doesn't chop.
+        if cls == 2:
             self._misses = 0
             self._gate_open = True
-        else:
+        elif cls == 1:
+            self._gate_open = False          # human-directed — never the device
+        elif self._gate_open:                # cls == 0: silence, maybe a pause
             self._misses += 1
             if self._misses >= self._close_debounce:
                 self._gate_open = False
@@ -192,7 +195,7 @@ def main() -> int:
 
     @saa.on_prediction
     def _(ev):
-        attn.update_gate(ev.cls == 2)          # debounced open/close
+        attn.update_gate(ev.cls)               # 2 opens, 1 closes now, 0 debounced
         resp, gate = attn.responding, attn.gate_open
         log.info("PRED cls=%d conf=%.2f src=%s | resp=%s gate=%s send=%s",
                  ev.cls, ev.confidence or 0.0, ev.source,

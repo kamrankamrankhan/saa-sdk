@@ -8,7 +8,7 @@ Single file ([`agent.py`](./agent.py)). The moving parts:
 
 - `AttentionClient(token=..., enable_audio=False, enable_video=False)` -> streaming SDK in **feed mode**: it opens the cloud WebSocket but captures nothing itself.
 - `SAAFeedAudioInterface(DefaultAudioInterface(), saa)` -> wraps ElevenLabs' audio interface. Its mic tee feeds **every** frame to SAA, and sends ElevenLabs a **continuous stream**: the user's real audio while SAA says device-directed, **silence** otherwise (non-addressed speech, or while the agent is speaking — so its own echo never loops back). ElevenLabs keeps doing its own VAD/endpointing on that stream; SAA just decides what it hears.
-- `@saa.on_prediction` → `attn.update_gate(ev.cls == 2)` -> **the gate**, with a **close-debounce**: it opens on class-2 but closes only after a short streak of non-class-2 ticks (default 4 ≈ 1 s). That stops a single class-0 dip from chopping an utterance, and hands ElevenLabs a real trailing-silence tail — the end-of-turn cue it needs to reply.
+- `@saa.on_prediction` → `attn.update_gate(ev.cls)` -> **the gate**: it opens on class-2 (device-directed), closes immediately on class-1 (human-directed). ElevenLabs endpoints on the silence the closed gate streams, then replies.
 - `output()` / `interrupt()` → `saa.mark_responding(True/False)` — so SAA knows when the agent itself is speaking. `responding` is held for the agent TTS's **playback duration** (derived from the queued PCM bytes, +a short tail), because `DefaultAudioInterface` queues `output()` instantly but plays on a background thread; tracking `output()` idle instead would drop `responding` mid-playback and the agent's own echo would leak back.
 
 ### Warmup-gated greeting
@@ -22,7 +22,7 @@ The payoff: the agent greets only once SAA is live, and because SAA is already w
 
 ```python
 saa = AttentionClient(token=SAA_API_KEY, enable_audio=False, enable_video=False)
-attn = SAAFeedAudioInterface(DefaultAudioInterface(), saa, gate=True)
+attn = SAAFeedAudioInterface(DefaultAudioInterface(), saa)
 
 warmed = threading.Event()
 
@@ -30,7 +30,7 @@ warmed = threading.Event()
 def _(): warmed.set()                             # native SAA warmup pivot
 
 @saa.on_prediction
-def _(ev): attn.set_gate_open(ev.cls == 2)        # the gate
+def _(ev): attn.update_gate(ev.cls)               # the gate
 
 conversation = Conversation(client=ElevenLabs(...), agent_id=..., requires_auth=True, audio_interface=attn)
 
@@ -55,12 +55,17 @@ python agent.py
 
 Talk to it. The agent answers only when you're addressing it; speech you direct at another person in the room never reaches the model.
 
-## Terminal dashboard
+## Logs
 
-On a TTY the agent renders a small live status frame ([`tui.py`](./tui.py)) once SAA warms up:
-the current prediction + confidence (MODE), a rolling class buffer (BUFFER), the gate (GATE
-OPEN/CLOSED), and the agent state (AGENT idle / listening / speaking). Without a TTY (piped, CI)
-it no-ops, so the agent still runs headless.
+The agent logs one line per SAA prediction so the gating is observable:
+
+```
+PRED cls=2 conf=0.93 src=model | resp=False gate=open send=real
+```
+
+`cls` is the prediction (0 silent / 1 human-directed / 2 device-directed), `gate` the debounced
+gate, and `send` whether the user's real audio (`real`) or silence (`muted`) is reaching
+ElevenLabs that tick. `USER:` / `AGENT:` lines mark ElevenLabs transcripts and replies.
 
 ## Cost note
 
