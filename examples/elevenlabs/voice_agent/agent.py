@@ -4,6 +4,7 @@
 # while SAA says it's device-directed (held open briefly so a pause doesn't chop
 # it and so ElevenLabs can endpoint), and silence otherwise — so the agent never
 # answers side conversations, while its own VAD still endpoints and replies.
+# While muted it also pings ElevenLabs' reset-turn-timeout so the agent doesn't re-prompt
 # Logs prediction / responding / send state so the gating can be observed (no TUI).
 import argparse
 import logging
@@ -33,16 +34,22 @@ class SAAFeedAudioInterface(AudioInterface):
 
     - Gate opens on class-2 (device-directed) and closes at once on class-1
       (human-directed). A class-0 (silence) dip is debounced for
-      `close_debounce_ticks`
+      `close_debounce_ticks` ticks so a pause mid-utterance doesn't chop the turn.
 
     - `responding` is tracked by agent-TTS *playback* duration, not output() calls:
       DefaultAudioInterface queues output() instantly but plays on a background
       thread, so output()-idle would flip responding off mid-playback and the
       agent's echo (no AEC) would leak back as user audio.
+
+    - While the gate is shut, a keepalive ping (`bind_keepalive`) resets ElevenLabs'
+      turn timer so its no-input timeout never re-prompts during silence/side-talk.
+      turn_timeout caps at 30s and isn't per-session overridable, so the reset
+      event is the only way to hold the turn open indefinitely.
     """
 
     def __init__(self, base: AudioInterface, saa: AttentionClient, *,
-                 close_debounce_ticks: int = 4, responding_tail_ms: int = 300):
+                 close_debounce_ticks: int = 4, responding_tail_ms: int = 300,
+                 keepalive_s: float = 5.0):
         self._base = base
         self._saa = saa
         self._close_debounce = close_debounce_ticks
@@ -54,6 +61,9 @@ class SAAFeedAudioInterface(AudioInterface):
         self._responding = False
         self._play_until = 0.0          # monotonic deadline: agent audio plays until here
         self._sending_real = False      # last send state (real vs silence) for transition logs
+        self._keepalive_s = keepalive_s # ping period to reset ElevenLabs' turn timer
+        self._keepalive_cb = None       # set by bind_keepalive once the session is live
+        self._last_keepalive = 0.0
         self._lock = threading.Lock()
         self._wd_stop = threading.Event()
         self._wd: threading.Thread | None = None
@@ -65,6 +75,11 @@ class SAAFeedAudioInterface(AudioInterface):
     @property
     def gate_open(self) -> bool:
         return self._gate_open
+
+    def bind_keepalive(self, cb) -> None:
+        # call once the ElevenLabs session is live: cb resets its turn timer so the
+        # no-input timeout never re-prompts while the gate is shut.
+        self._keepalive_cb = cb
 
     def update_gate(self, cls: int) -> None:
         # open on device-directed (2); human-directed (1) closes at once; a
@@ -160,10 +175,19 @@ class SAAFeedAudioInterface(AudioInterface):
 
     def _watchdog(self):
         while not self._wd_stop.wait(0.1):
+            now = time.monotonic()
             with self._lock:
-                done = (self._responding and time.monotonic() >= self._play_until + self._tail_s)
+                done = (self._responding and now >= self._play_until + self._tail_s)
             if done:
                 self._set_responding(False, "playback-done")
+            # hold ElevenLabs' turn open while muted so it doesn't re-prompt on silence
+            if (self._keepalive_cb and not self._gate_open and not self._responding
+                    and now - self._last_keepalive >= self._keepalive_s):
+                self._last_keepalive = now
+                try:
+                    self._keepalive_cb()
+                except Exception:
+                    pass
 
 
 def main() -> int:
@@ -226,7 +250,10 @@ def main() -> int:
     log.info("warming up SAA model... (~10-15s)")
     if not warmed.wait(timeout=20.0):
         log.warning("SAA warmup did not complete within 20s — greeting anyway")
+    # Hold ElevenLabs' turn open during silence/side-talk: its turn_timeout caps at
+    # 30s and isn't overridable, so we reset it
     conversation.start_session()
+    attn.bind_keepalive(conversation.register_user_activity)
     log.info("session started — Ctrl+C to end")
     try:
         conversation.wait_for_session_end()
