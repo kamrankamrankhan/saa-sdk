@@ -44,7 +44,7 @@ class SAAFeedAudioInterface(AudioInterface):
     - While the gate is shut, a keepalive ping (`bind_keepalive`) resets ElevenLabs'
       turn timer so its no-input timeout never re-prompts during silence/side-talk.
       turn_timeout caps at 30s and isn't per-session overridable, so the reset
-      event is the only way to hold the turn open indefinitely.
+      event is the only way to hold the turn open indefinitely. 
     """
 
     def __init__(self, base: AudioInterface, saa: AttentionClient, *,
@@ -160,6 +160,9 @@ class SAAFeedAudioInterface(AudioInterface):
             self._sending_real = send_real
             log.info("SEND %s  (gate=%s resp=%s)",
                      "real " if send_real else "muted", self._gate_open, self._responding)
+        if send_real:
+            # defer the keepalive to send
+            self._last_keepalive = time.monotonic()
         self._user_cb(audio if send_real else bytes(len(audio)))
 
     def _set_responding(self, value: bool, reason: str):
