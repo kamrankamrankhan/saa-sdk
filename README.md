@@ -21,9 +21,8 @@
   &nbsp;&nbsp;
   <a href="./examples/livekit/"><img alt="LiveKit" src="./assets/brands/livekit.svg" height="28"></a>
   &nbsp;&nbsp;
-  <a href="./examples/openai-realtime/"><img alt="OpenAI Realtime" src="./assets/brands/openai.svg" height="28"></a>
   &nbsp;&nbsp;
-  <a href="./examples/elevenlabs-cai/"><img alt="ElevenLabs Conversational AI" src="./assets/brands/elevenlabs.svg" height="28"></a>
+  <a href="./examples/elevenlabs/"><img alt="ElevenLabs Conversational AI" src="./assets/brands/elevenlabs.svg" height="28"></a>
 </p>
 
 ## What is SAA?
@@ -52,30 +51,44 @@ A voice agent's microphone hears every voice in the room: yours, a coworker's, t
   </tbody>
 </table>
 
-**SAA** (Selective Auditory Attention) is a hosted classifier that runs **before STT** and emits one `speechReady` event per device-directed utterance. Side talk, background media, and the agent's own playback are filtered server-side, so your STT / LLM / TTS only see audio meant for the agent.
+**SAA** (Selective Auditory Attention) is a hosted classifier that runs **before STT** and decides, per utterance, whether the speech was directed at the device. Side talk, background media, and the agent's own playback are filtered out, so your STT / LLM / TTS only see audio meant for the agent.
 
 - **No wake word.** SAA decides per-utterance from the audio (and optionally low-rate video) stream.
-- **Hosted, not on-device.** A WebSocket to `server.attentionlabs.ai`; the open SDKs are thin clients. On-device deployment is a separate enterprise licence.
-- **Drop-in adapters** for Twilio, Pipecat, LiveKit Agents, OpenAI Realtime, and ElevenLabs CAI, each with a working reference under [`examples/`](./examples/).
+- **Hosted.** A WebSocket to Attention Labs' cloud; the open SDKs are thin clients. On-device deployment is a separate enterprise licence.
 
-The architecture and evaluation are described in [arXiv:2604.08412](https://arxiv.org/abs/2604.08412); the paper is explicit that SAA is not a like-for-like substitute for every addressee-detection regime, so see the paper for operating points and caveats.
+## Three ways to integrate
+
+| Shape | Package | Use it when |
+|---|---|---|
+| **Streaming SDK** | [`@attenlabs/saa-js`](./packages/saa-js), [`attenlabs-saa`](./packages/saa-py) | your app captures the audio/video itself — a browser tab, a kiosk, a custom Python app — and you want typed attention events to gate your own pipeline. |
+| **LiveKit hosted bridge** | [`saa-livekit-client`](./packages/saa-livekit-client) | you run a [LiveKit Agents](https://docs.livekit.io/agents/) voice agent. A hidden participant joins your room and gates the session. |
+| **Pipecat hosted bridge (Daily)** | [`saa-pipecat-client`](./packages/saa-pipecat-client) | you run a [Pipecat](https://github.com/pipecat-ai/pipecat) voice agent on Daily. A hidden participant joins your Daily room and gates the pipeline through the `"saa"` app-message topic. |
+
+[ElevenLabs Conversational AI](./examples/elevenlabs) is also supported, via the streaming SDK's `feed_audio` ingestion (its room is sealed, so there's no hosted-bridge shape). Twilio and OpenAI Realtime are on the [roadmap](#roadmap).
 
 ## Install
 
 ```bash
-npm install @attenlabs/saa-js     # JavaScript
-pip install attenlabs-saa          # Python
+npm install @attenlabs/saa-js     # JavaScript / browser
+pip install attenlabs-saa          # Python (streaming SDK)
+pip install saa-livekit-client     # Python (LiveKit hosted bridge)
+pip install saa-pipecat-client     # Python (Pipecat-on-Daily hosted bridge)
 ```
 
-Get a token at [attentionlabs.ai/dashboard](https://attentionlabs.ai/dashboard).
+Get an API key at [attentionlabs.ai](https://attentionlabs.ai).
 
-## Quickstart
+## Streaming SDK
+
+You capture the media; SAA emits typed events. The key event is `turnReady` / `turn_ready` — one device-directed utterance, captured and ready to forward to your STT or LLM.
 
 ```js
 import { AttentionClient } from "@attenlabs/saa-js";
 
-const client = new AttentionClient({ token: process.env.ATTENLABS_TOKEN });
-client.on("speechReady", (e) => yourSTT.send(e.audioBase64));
+const client = new AttentionClient({ token: process.env.SAA_API_KEY });
+
+// fires once per device-directed turn; turn.audioBase64 is PCM16 @ 16 kHz
+client.on("turnReady", (turn) => yourSTT.send(turn.audioBase64));
+
 await client.start({ videoElement: document.querySelector("video") });
 ```
 
@@ -83,84 +96,96 @@ await client.start({ videoElement: document.querySelector("video") });
 import os
 from saa import AttentionClient
 
-client = AttentionClient(token=os.environ["ATTENLABS_TOKEN"])
+client = AttentionClient(token=os.environ["SAA_API_KEY"])
 
-@client.on_speech_ready
-def _(event):
-    your_stt.send(event.audio_base64)
+@client.on_turn_ready
+def _(turn):
+    # turn.audio_base64 — PCM16 @ 16 kHz mono; turn.audio_pcm16 — np.int16 array
+    your_stt.send(turn.audio_base64)
 
 client.start()
 ```
 
-For phone calls, wearables, and other audio-only deployments, omit `videoElement` (browser) or pass `enable_video=False` (Python).
+For audio-only deployments, omit `videoElement` (browser) or pass `enable_video=False` (Python).
 
-## Adapters
+Both SDKs also emit `prediction`, `vad`, `state`, `interrupt`, `config`, and `stats` events, and expose `mute()` / `unmute()`, `setThreshold()` / `set_threshold()`, and `markResponding()` / `mark_responding()`. See [`packages/saa-js`](./packages/saa-js) and [`packages/saa-py`](./packages/saa-py).
 
-Working integrations under [`examples/`](./examples/). Each ships a `Dockerfile`, `Makefile`, smoke tests, and a per-stack README. These are real production references, not snippets.
+## LiveKit hosted bridge
 
-| Stack | Path |
-|---|---|
-| Twilio Media Streams | [`examples/twilio/`](./examples/twilio/) |
-| Pipecat | [`examples/pipecat/`](./examples/pipecat/) |
-| LiveKit Agents | [`examples/livekit/`](./examples/livekit/) |
-| OpenAI Realtime | [`examples/openai-realtime/`](./examples/openai-realtime/) |
-| ElevenLabs Conversational AI | [`examples/elevenlabs-cai/`](./examples/elevenlabs-cai/) |
+For [LiveKit Agents](https://docs.livekit.io/agents/), `saa-livekit-client` summons a hidden participant into your room that runs the classifier and publishes events on the `"saa"` data topic. Your agent consumes them through `AttentionEngine` and gates the session — no model weights or media ever touch your process.
 
-If your framework isn't listed, the cloud SDK is small enough that adapter code is usually under 300 lines, so copy the closest existing example and adapt.
+```python
+from saa_livekit_client import AttentionEngine, attention_agent_token, start_attention_session
+
+saa = await start_attention_session(
+    api_key=SAA_API_KEY, livekit_url=LIVEKIT_URL,
+    agent_token=attention_agent_token(api_key=LK_KEY, api_secret=LK_SECRET, room_name=ctx.room.name),
+    room_name=ctx.room.name, participant_identity=user.identity,
+)
+engine = AttentionEngine(ctx.room, agent_identity=saa.agent_identity)
+
+@engine.on_prediction
+def _(p):
+    session.input.set_audio_enabled(p.aligned_class == 2)   # the gate
+
+await engine.start()
+```
+
+Three runnable samples — a cascaded pipeline, an OpenAI Realtime agent, and a vanilla-JS web client — are in [`examples/livekit/`](./examples/livekit).
+
+## Pipecat-on-Daily hosted bridge
+
+For [Pipecat](https://github.com/pipecat-ai/pipecat) voice agents running on Daily, `saa-pipecat-client` summons the same hidden participant into your Daily room and publishes events on Daily's app-message channel under the `"saa"` topic. Your bot consumes them through `AttentionEngine` (which subscribes via your `DailyTransport`) and gates the pipeline.
+
+```python
+from saa_pipecat_client import AttentionEngine, attention_agent_token, start_attention_session
+
+saa = await start_attention_session(
+    api_key=SAA_API_KEY, room_url=ROOM_URL,
+    agent_token=attention_agent_token(daily_api_key=DAILY_API_KEY, room_name=room_name),
+    participant_identity=human_identity,
+)
+engine = AttentionEngine(transport, agent_identity=saa.agent_identity)
+engine.bind_task(task)
+
+@engine.on_prediction
+def _(p):
+    addressee_gate.suppressed = (p.aligned_class == 1 and p.confidence > 0.7)
+
+await engine.start()
+```
+
+Two runnable samples — a cascaded Pipecat pipeline and a vanilla-JS web client — are in [`examples/pipecat/`](./examples/pipecat).
 
 ## Proactive agents (speak first)
 
-Some agents have to speak first: an outbound AI-SDR calling a lead, a meeting follow-up bot, a kiosk that greets visitors. Those interactions need a different lifecycle than the standard request-response shape. SAA's `mark_responding()` lifecycle lets the agent assert when it's the one speaking, suppressing the gate during its own TTS, and resume gating once the tail clears.
+The streaming SDKs expose `markResponding(true)` / `mark_responding(True)` so the agent can assert when *it* is the one speaking — suppressing the gate during its own TTS and resuming once the tail clears. The LiveKit and Pipecat bridges expose the same lifecycle via `engine.responding_start()` / `responding_stop()` — identical surface.
 
-Five overlays in [`examples/proactive-agent/`](./examples/proactive-agent/), one per framework adapter:
-
-| Stack | Path |
-|---|---|
-| Twilio (AI-SDR outbound calls) | [`examples/proactive-agent/twilio/`](./examples/proactive-agent/twilio/) |
-| Pipecat (meeting follow-up) | [`examples/proactive-agent/pipecat/`](./examples/proactive-agent/pipecat/) |
-| LiveKit (room-based proactive) | [`examples/proactive-agent/livekit/`](./examples/proactive-agent/livekit/) |
-| OpenAI Realtime (laptop / coding / dashboard) | [`examples/proactive-agent/openai-realtime/`](./examples/proactive-agent/openai-realtime/) |
-| ElevenLabs CAI (browser WebRTC) | [`examples/proactive-agent/elevenlabs-cai/`](./examples/proactive-agent/elevenlabs-cai/) |
-
-The lifecycle helpers used by every overlay live in [`packages/saa-proactive-js/`](./packages/saa-proactive-js/) and [`packages/saa-proactive-py/`](./packages/saa-proactive-py/).
 
 ## How it composes
 
-SAA is the addressee decision that sits between your VAD and STT. Not a VAD, not a wake word, not an end-of-turn detector: those layers continue to do their jobs around it.
+SAA is the addressee decision that sits between your VAD and STT. Not a VAD, not a wake word, not an end-of-turn detector: those layers keep doing their jobs around it.
 
 <p align="center">
   <img alt="Where SAA sits in your voice stack: noise suppression and VAD upstream, SAA addressee gate, then STT → LLM → TTS downstream" src="./assets/diagrams/where-saa-sits-dark.svg" width="820">
 </p>
 
-## Documentation
-
-The core SDK reference is in each package; the framework adapters explain themselves in their own READMEs. The hosted docs site has the full reference.
-
-- [`examples/README.md`](./examples/README.md): per-stack adapter index.
-- [`examples/proactive-agent/README.md`](./examples/proactive-agent/README.md): proactive-agent overlay variants.
-- [`packages/saa-js/README.md`](./packages/saa-js/README.md), [`packages/saa-py/README.md`](./packages/saa-py/README.md): SDK reference.
-- [`packages/saa-gate/README.md`](./packages/saa-gate/README.md): production routing policy.
-- [`packages/saa-proactive-js/README.md`](./packages/saa-proactive-js/README.md), [`packages/saa-proactive-py/README.md`](./packages/saa-proactive-py/README.md): proactive-agent lifecycle helpers.
-- Full reference docs: [attentionlabs.ai/docs](https://attentionlabs.ai/docs).
-
 ## On-device deployment
 
-The open SDKs stream to the SAA cloud. For deployments where audio must stay on the device — telephony, embedded systems, wearables, robotics, kiosks, and similar — direct on-device licensing is available. Contact us via [attentionlabs.ai](https://attentionlabs.ai).
+The open SDKs stream to the SAA cloud. For deployments where audio must stay on the device (telephony, embedded systems, wearables, robotics, kiosks) direct on-device licensing is available. Contact us via [attentionlabs.ai](https://attentionlabs.ai).
 
-## Citation
+## Documentation
 
-If you reference SAA in research, please cite the technical report ([arXiv:2604.08412](https://arxiv.org/abs/2604.08412)) and this repository. A [`CITATION.cff`](./CITATION.cff) is provided.
+- [`packages/saa-js/README.md`](./packages/saa-js/README.md), [`packages/saa-py/README.md`](./packages/saa-py/README.md) — streaming SDK reference.
+- [`packages/saa-livekit-client/README.md`](./packages/saa-livekit-client/README.md) — LiveKit hosted bridge.
+- [`packages/saa-pipecat-client/README.md`](./packages/saa-pipecat-client/README.md) — Pipecat-on-Daily hosted bridge.
+- [`examples/README.md`](./examples/README.md) — runnable examples.
 
 ## License
 
-Mixed-license monorepo:
+Apache-2.0 across the repo — each package and the examples ship under it (see each subtree's `LICENSE`). The hosted cloud service is governed by the Attention Labs Terms of Service.
 
-- `packages/saa-js` and `packages/saa-py` ship under **MIT** (their published licences on npm and PyPI).
-- `packages/saa-gate`, `packages/saa-proactive-{js,py}`, the `examples/` adapters, and the docs ship under **Apache-2.0**.
-- Each package's `LICENSE` is authoritative for its subtree.
-- The hosted cloud service is governed by the Attention Labs Terms of Service.
-
-[`SECURITY.md`](./SECURITY.md) · [`CONTRIBUTING.md`](./CONTRIBUTING.md) · [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) · [`CHANGELOG.md`](./CHANGELOG.md) · [`NOTICE`](./NOTICE)
+[`SECURITY.md`](./SECURITY.md) · [`CONTRIBUTING.md`](./CONTRIBUTING.md) · [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) · [`CHANGELOG.md`](./CHANGELOG.md) · [`NOTICE`](./NOTICE) · [`CITATION.cff`](./CITATION.cff)
 
 ---
 
