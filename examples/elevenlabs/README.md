@@ -21,7 +21,7 @@ No model weights, no ML dependencies, and no media leave for anywhere but the SA
 
 ## Quick start
 
-Needs **Python 3.10+** and an ElevenLabs agent ID.
+Needs **Python 3.10 to 3.12** and an ElevenLabs agent ID.
 
 ```bash
 cd examples/elevenlabs
@@ -35,6 +35,23 @@ python agent.py
 ```
 
 The sample **auto-loads** `examples/elevenlabs/.env`, so the command is identical on Windows, macOS, and Linux.
+
+### Windows notes
+
+`attenlabs-saa` is pure Python and installs cleanly. The only Windows friction is `pyaudio`
+(pulled in by `elevenlabs[pyaudio]` for microphone capture), which has no wheels for the
+newest Python and otherwise compiles from source against PortAudio.
+
+1. **Use Python 3.11 or 3.12.**
+2. **Install `pyaudio` from a wheel, not source**, before `pip install -r requirements.txt`:
+   - `pip install pipwin && pipwin install pyaudio`, or
+   - Conda: `conda install -c anaconda pyaudio`, or
+   - download a matching `.whl` and `pip install path\to\PyAudio...whl`.
+3. **If a long-path error appears** when cloning into a deep folder, enable long paths once in an Administrator PowerShell, then retry:
+   ```powershell
+   Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1
+   ```
+   or clone closer to the drive root.
 
 ## The lines that integrate SAA
 
