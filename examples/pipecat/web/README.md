@@ -44,11 +44,8 @@ pip install -e ../../../packages/saa-pipecat-client
 pip install -r requirements.txt
 
 cp .env.example .env   # fill in the keys — at minimum SAA_API_KEY + DAILY_API_KEY
-# Export the .env to your shell. Bash / Zsh (macOS / Linux / WSL2):
-set -a && source .env && set +a
-# Fish: `set -gx (cat .env | grep -v '^#' | string split0)` or use `direnv`.
 
-uvicorn token_server:app --port 8000
+python -m uvicorn token_server:app --port 8000
 # open http://localhost:8000 and click Start
 ```
 

@@ -3,14 +3,18 @@ import asyncio
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Optional
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from saa_pipecat_client import attention_agent_token, start_attention_session
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 logger = logging.getLogger("token-server")
 logging.basicConfig(level=logging.INFO)
