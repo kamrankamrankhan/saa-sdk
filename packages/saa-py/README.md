@@ -63,7 +63,7 @@ A full CLI demo wiring SAA + OpenAI Realtime lives at [**saa-py-demo**](https://
 from saa import AttentionClient, CameraConfig, MicConfig
 
 client = AttentionClient(
-    token="...",                    # API key — sent as WS subprotocol
+    token="...",                    # API key, sent as WS subprotocol
     url=None,                      # Server URL (default: https://broker.attentionlabs.ai)
     video=CameraConfig(),          # Webcam config
     audio=MicConfig(),             # Mic config
@@ -144,9 +144,9 @@ def handle(event):
 
 | decorator             | payload                                                                  | fires when                              |
 | --------------------- | ------------------------------------------------------------------------ | --------------------------------------- |
-| `@on_connected`       | —                                                                        | WebSocket opens                         |
-| `@on_started`         | —                                                                        | Server has loaded the model             |
-| `@on_warmup_complete` | —                                                                        | Model warmed up and producing predictions |
+| `@on_connected`       | none                                                                        | WebSocket opens                         |
+| `@on_started`         | none                                                                        | Server has loaded the model             |
+| `@on_warmup_complete` | none                                                                        | Model warmed up and producing predictions |
 | `@on_prediction`      | `PredictionEvent`                                                        | Each attention prediction               |
 | `@on_vad`             | `VadEvent`                                                               | Voice activity update                   |
 | `@on_state`           | `StateEvent`                                                             | Conversation state transition           |
