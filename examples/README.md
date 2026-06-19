@@ -48,7 +48,7 @@ ElevenLabs runs its agent inside its own sealed WebRTC room, so this sample uses
 |---|---|---|
 | [`elevenlabs/voice_agent/`](./elevenlabs/voice_agent) | SAA gating an ElevenLabs Conversational AI agent so only device-directed speech reaches the model, via `attenlabs-saa`'s `feed_audio`. | `python agent.py` |
 
-Needs **attenlabs-saa >= 0.4.0** (the `feed_audio` API) and **elevenlabs >= 2.45**.
+Needs **attenlabs-saa >= 0.6.0** and **elevenlabs >= 2.45**.
 
 ## Roadmap
 
