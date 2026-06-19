@@ -8,7 +8,7 @@ Every voice pipeline has the same problem: the microphone hears everything, but 
 
 That makes SAA useful for robots, smart displays, TVs, desktop agents, AR/VR interfaces, and other voice AI systems that need to ignore background conversation while still feeling natural.
 
-[reachy_demo.webm](https://github.com/user-attachments/assets/14c5a350-9059-4ac7-bba9-92dca01feb69)
+[demo.webm](https://github.com/user-attachments/assets/14c5a350-9059-4ac7-bba9-92dca01feb69)
 
 ---
 
@@ -140,8 +140,8 @@ Your pipeline only needs to act on state `2`. States `0` and `1` let you skip AS
 
 ## Tuning
 
-- `--threshold` (default `0.85`) — minimum confidence for a state-`2` prediction to count as device-directed.
-- The app triggers `listening` after **4 consecutive** state-`2` predictions above threshold. Edit `_BUFFER_LEN` and the trigger logic in [main.py](main.py) to change this.
+- `--threshold` (default `0.85`): minimum confidence for a state-`2` prediction to count as device-directed.
+- Turn detection is handled by the SAA server/SDK (`on_turn_ready`); the demo just forwards the captured turn. `_BUFFER_LEN` in [main.py](main.py) only sizes the on-screen prediction history, not the trigger.
 
 Lower the threshold for more sensitive triggering; raise it for fewer false starts.
 

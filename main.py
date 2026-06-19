@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CLI demo for attenlabs-saa.
 
-Streams mic + webcam to the SD Attention Server, forwards detected speech to
+Streams mic + webcam to the SAA inference server, forwards detected speech to
 OpenAI Realtime, and plays the response back through the local speaker.
 """
 
@@ -298,7 +298,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--token", default=os.environ.get("SAA_API_KEY"),
                    help="SAA auth token (or set SAA_API_KEY env var)")
     p.add_argument("--url", default=None,
-                   help="Override the SAA server URL (default: wss://server.attentionlabs.ai/ws)")
+                   help="Override the SAA server URL (default: https://broker.attentionlabs.ai)")
     p.add_argument("--openai-key", default=os.environ.get("OPENAI_API_KEY"),
                    help="OpenAI API key with Realtime access (env: OPENAI_API_KEY)")
     p.add_argument("--camera-index", type=int, default=None, help="Webcam device index (skip selector)")
