@@ -38,14 +38,14 @@ await client.start({ videoElement: videoEl });
 
 | Option             | Type     | Default                              | Description |
 | ------------------ | -------- | ------------------------------------ | ----------- |
-| `token`            | string   | —                                    | Your API key from attentionlabs.ai. |
-| `initialThreshold` | number   | `0.7`                                | Confidence threshold for predictions (0–1). |
+| `token`            | string   | none                                    | Your API key from attentionlabs.ai. |
+| `initialThreshold` | number   | `0.7`                                | Confidence threshold for predictions (0-1). |
 | `enableAudio`      | boolean  | `true`                               | Capture the mic internally. Set `false` to push audio via `feedAudio()`. |
 | `enableVideo`      | boolean  | `true`                               | Capture the camera internally. Set `false` for audio-only or to push frames via `feedVideo()`. |
 | `serverProfile`    | string   | inferred                             | Server processor variant. Defaults to `"audio_only"` when `enableVideo: false`, else the full processor. Pass `"default"` to force the full processor without local video. |
 | `video.width`      | number   | `1920`                               | Capture width. |
 | `video.height`     | number   | `1080`                               | Capture height. |
-| `video.jpegQuality`| number   | `0.6`                                | JPEG quality (0–1). |
+| `video.jpegQuality`| number   | `0.6`                                | JPEG quality (0-1). |
 
 ## Methods
 
@@ -56,17 +56,17 @@ await client.start({ videoElement: videoEl });
 | `feedAudio(audio, sampleRate?)` | Push externally-captured audio (requires `enableAudio: false`). Accepts Float32 `[-1,1]`, Int16 PCM, or a raw int16 buffer; re-chunked + resampled to the wire's 16 kHz / 100 ms blocks. See [External capture](#external-capture). |
 | `feedVideo(jpeg)`           | Push an externally-captured JPEG frame (requires `enableVideo: false`). Accepts a `Blob`, `ArrayBuffer`, or view. |
 | `mute()` / `unmute()`       | Pause or resume audio. |
-| `markResponding(boolean)`   | Signal that your app is responding — pauses predictions until finished. |
-| `setThreshold(value)`       | Update the confidence threshold (0–1). |
+| `markResponding(boolean)`   | Signal that your app is responding, pauses predictions until finished. |
+| `setThreshold(value)`       | Update the confidence threshold (0-1). |
 | `on(event, listener)`       | Subscribe to an event. Returns an unsubscribe function. |
 
 ## Events
 
 | Event            | Payload |
 | ---------------- | ------- |
-| `connected`      | — |
-| `started`        | — |
-| `warmupComplete` | — |
+| `connected`      | none |
+| `started`        | none |
+| `warmupComplete` | none |
 | `prediction`     | `{ cls, rawCls, confidence, source, numFaces, responding }` |
 | `vad`            | `{ probability, isSpeech }` |
 | `state`          | `{ state }` (one of `listening`, `sending`, `cancelled`, `idle`) |
