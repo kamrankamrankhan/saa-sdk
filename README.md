@@ -66,13 +66,19 @@ await client.start({ videoElement: videoEl });
 | ---------------- | ------- |
 | `connected`      | — |
 | `started`        | — |
-| `prediction`     | `{ cls, confidence, source, numFaces }` |
+| `warmupComplete` | — |
+| `prediction`     | `{ cls, rawCls, confidence, source, numFaces, responding }` |
 | `vad`            | `{ probability, isSpeech }` |
-| `state`          | `{ state }` — one of `listening`, `sending`, `cancelled`, `idle` |
+| `state`          | `{ state }` (one of `listening`, `sending`, `cancelled`, `idle`) |
 | `turnReady`      | `{ audioBase64, audioPcm16, durationSec, frames, context }` |
-| `interrupt`      | `{ fadeMs, confidence }`|
+| `config`         | `{ modelClass2Threshold }` |
+| `stats`          | `{ rttMs, bufferedAmount, sentVideo, skippedVideo, sentAudio, uptimeMs }` |
+| `interrupt`      | `{ fadeMs, confidence }` |
+| `interjection`   | `{ reason, audioBase64, audioPcm16, durationSec }` |
 | `error`          | `{ title, message, detail }` |
 | `disconnected`   | `{ code, reason }` |
+
+`warmupComplete` fires once the server model has warmed up and is producing real predictions; use it to drop any loading UI. `prediction.responding` is `true` while your app is mid-response (see `markResponding`), and `interjection` fires when the agent should volunteer after humans go quiet.
 
 ## LLM integration
 
