@@ -60,26 +60,26 @@ A voice agent's microphone hears every voice in the room: yours, a coworker's, t
 
 | Shape | Package | Use it when |
 |---|---|---|
-| **Streaming SDK** | [`@attenlabs/saa-js`](./packages/saa-js), [`attenlabs-saa`](./packages/saa-py) | your app captures the audio/video itself — a browser tab, a kiosk, a custom Python app — and you want typed attention events to gate your own pipeline. |
-| **LiveKit hosted bridge** | [`saa-livekit-client`](./packages/saa-livekit-client) | you run a [LiveKit Agents](https://docs.livekit.io/agents/) voice agent. A hidden participant joins your room and gates the session. |
-| **Pipecat hosted bridge (Daily)** | [`saa-pipecat-client`](./packages/saa-pipecat-client) | you run a [Pipecat](https://github.com/pipecat-ai/pipecat) voice agent on Daily. A hidden participant joins your Daily room and gates the pipeline through the `"saa"` app-message topic. |
+| **Streaming SDK** | [`@attenlabs/saa-js`](./packages/saa-js), [`attenlabs-saa`](./packages/saa-py) | your app captures the audio/video itself, a browser tab, a kiosk, a custom Python app, and you want typed attention events to gate your own pipeline. |
+| **LiveKit** | [`saa-livekit-client`](./packages/saa-livekit-client) | you run a [LiveKit Agents](https://docs.livekit.io/agents/) voice agent. SAA joins your room and gates the session. |
+| **Pipecat (Daily)** | [`saa-pipecat-client`](./packages/saa-pipecat-client) | you run a [Pipecat](https://github.com/pipecat-ai/pipecat) voice agent on Daily. SAA joins your Daily room and gates the pipeline through the `"saa"` app-message topic. |
 
-[ElevenLabs Conversational AI](./examples/elevenlabs) is also supported, via the streaming SDK's `feed_audio` ingestion (its room is sealed, so there's no hosted-bridge shape). Twilio and OpenAI Realtime are on the [roadmap](#roadmap).
+[ElevenLabs Conversational AI](./examples/elevenlabs) is also supported, via the streaming SDK's `feed_audio` ingestion (its room is sealed, so SAA can't join it directly). Twilio and OpenAI Realtime are on the [roadmap](#roadmap).
 
 ## Install
 
 ```bash
 npm install @attenlabs/saa-js     # JavaScript / browser
 pip install attenlabs-saa          # Python (streaming SDK)
-pip install saa-livekit-client     # Python (LiveKit hosted bridge)
-pip install saa-pipecat-client     # Python (Pipecat-on-Daily hosted bridge)
+pip install saa-livekit-client     # Python (LiveKit)
+pip install saa-pipecat-client     # Python (Pipecat on Daily)
 ```
 
 Get an API key at [attentionlabs.ai](https://attentionlabs.ai).
 
 ## Streaming SDK
 
-You capture the media; SAA emits typed events. The key event is `turnReady` / `turn_ready` — one device-directed utterance, captured and ready to forward to your STT or LLM.
+You capture the media; SAA emits typed events. The key event is `turnReady` / `turn_ready`, one device-directed utterance, captured and ready to forward to your STT or LLM.
 
 ```js
 import { AttentionClient } from "@attenlabs/saa-js";
@@ -100,7 +100,7 @@ client = AttentionClient(token=os.environ["SAA_API_KEY"])
 
 @client.on_turn_ready
 def _(turn):
-    # turn.audio_base64 — PCM16 @ 16 kHz mono; turn.audio_pcm16 — np.int16 array
+    # turn.audio_base64, PCM16 @ 16 kHz mono; turn.audio_pcm16, np.int16 array
     your_stt.send(turn.audio_base64)
 
 client.start()
@@ -110,9 +110,9 @@ For audio-only deployments, omit `videoElement` (browser) or pass `enable_video=
 
 Both SDKs also emit `prediction`, `vad`, `state`, `interrupt`, `config`, and `stats` events, and expose `mute()` / `unmute()`, `setThreshold()` / `set_threshold()`, and `markResponding()` / `mark_responding()`. See [`packages/saa-js`](./packages/saa-js) and [`packages/saa-py`](./packages/saa-py).
 
-## LiveKit hosted bridge
+## LiveKit
 
-For [LiveKit Agents](https://docs.livekit.io/agents/), `saa-livekit-client` summons a hidden participant into your room that runs the classifier and publishes events on the `"saa"` data topic. Your agent consumes them through `AttentionEngine` and gates the session — no model weights or media ever touch your process.
+For [LiveKit Agents](https://docs.livekit.io/agents/), `saa-livekit-client` brings SAA into your room to run the classifier and publish events on the `"saa"` data topic. Your agent consumes them through `AttentionEngine` and gates the session.
 
 ```python
 from saa_livekit_client import AttentionEngine, attention_agent_token, start_attention_session
@@ -131,11 +131,11 @@ def _(p):
 await engine.start()
 ```
 
-Three runnable samples — a cascaded pipeline, an OpenAI Realtime agent, and a vanilla-JS web client — are in [`examples/livekit/`](./examples/livekit).
+Two runnable samples, an OpenAI Realtime agent and a vanilla-JS web client, are in [`examples/livekit/`](./examples/livekit).
 
-## Pipecat-on-Daily hosted bridge
+## Pipecat on Daily
 
-For [Pipecat](https://github.com/pipecat-ai/pipecat) voice agents running on Daily, `saa-pipecat-client` summons the same hidden participant into your Daily room and publishes events on Daily's app-message channel under the `"saa"` topic. Your bot consumes them through `AttentionEngine` (which subscribes via your `DailyTransport`) and gates the pipeline.
+For [Pipecat](https://github.com/pipecat-ai/pipecat) voice agents running on Daily, `saa-pipecat-client` brings SAA into your Daily room and publishes events on Daily's app-message channel under the `"saa"` topic. Your bot consumes them through `AttentionEngine` (which subscribes via your `DailyTransport`) and gates the pipeline.
 
 ```python
 from saa_pipecat_client import AttentionEngine, attention_agent_token, start_attention_session
@@ -155,11 +155,11 @@ def _(p):
 await engine.start()
 ```
 
-Two runnable samples — a cascaded Pipecat pipeline and a vanilla-JS web client — are in [`examples/pipecat/`](./examples/pipecat).
+A runnable web-client sample is in [`examples/pipecat/`](./examples/pipecat).
 
 ## Proactive agents (speak first)
 
-The streaming SDKs expose `markResponding(true)` / `mark_responding(True)` so the agent can assert when *it* is the one speaking — suppressing the gate during its own TTS and resuming once the tail clears. The LiveKit and Pipecat bridges expose the same lifecycle via `engine.responding_start()` / `responding_stop()` — identical surface.
+The streaming SDKs expose `markResponding(true)` / `mark_responding(True)` so the agent can assert when *it* is the one speaking, suppressing the gate during its own TTS and resuming once the tail clears. The LiveKit and Pipecat bridges expose the same lifecycle via `engine.responding_start()` / `responding_stop()`, identical surface.
 
 
 ## How it composes
@@ -176,14 +176,14 @@ The open SDKs stream to the SAA cloud. For deployments where audio must stay on 
 
 ## Documentation
 
-- [`packages/saa-js/README.md`](./packages/saa-js/README.md), [`packages/saa-py/README.md`](./packages/saa-py/README.md) — streaming SDK reference.
-- [`packages/saa-livekit-client/README.md`](./packages/saa-livekit-client/README.md) — LiveKit hosted bridge.
-- [`packages/saa-pipecat-client/README.md`](./packages/saa-pipecat-client/README.md) — Pipecat-on-Daily hosted bridge.
-- [`examples/README.md`](./examples/README.md) — runnable examples.
+- [`packages/saa-js/README.md`](./packages/saa-js/README.md), [`packages/saa-py/README.md`](./packages/saa-py/README.md), streaming SDK reference.
+- [`packages/saa-livekit-client/README.md`](./packages/saa-livekit-client/README.md): the LiveKit client.
+- [`packages/saa-pipecat-client/README.md`](./packages/saa-pipecat-client/README.md): the Pipecat-on-Daily client.
+- [`examples/README.md`](./examples/README.md), runnable examples.
 
 ## License
 
-Apache-2.0 across the repo — each package and the examples ship under it (see each subtree's `LICENSE`). The hosted cloud service is governed by the Attention Labs Terms of Service.
+Apache-2.0 across the repo, each package and the examples ship under it (see each subtree's `LICENSE`). The hosted cloud service is governed by the Attention Labs Terms of Service.
 
 [`SECURITY.md`](./SECURITY.md) · [`CONTRIBUTING.md`](./CONTRIBUTING.md) · [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) · [`CHANGELOG.md`](./CHANGELOG.md) · [`NOTICE`](./NOTICE) · [`CITATION.cff`](./CITATION.cff)
 

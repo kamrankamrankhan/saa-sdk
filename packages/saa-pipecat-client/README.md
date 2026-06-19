@@ -1,9 +1,9 @@
 # saa-pipecat-client
 
-Pipecat / Daily client for the [saa](https://attentionlabs.ai) hosted bridge.
+Pipecat / Daily client for [saa](https://attentionlabs.ai).
 
 Adds attention-aware gating, barge-in, and proactive interjection to any
-Pipecat voice agent running on Daily — including bots deployed to
+Pipecat voice agent running on Daily, including bots deployed to
 [Daily Bots](https://docs.dailybots.ai/architecture) and Pipecat Cloud.
 
 The attention processor runs on our backend. Consumers do **not** deploy
@@ -19,7 +19,7 @@ pip install saa-pipecat-client
 
 **Requirements**: Python **3.11+** (pipecat-ai 1.x dropped 3.10). **macOS / Linux / WSL2 only**
 
-## Quickstart — existing Pipecat bot
+## Quickstart: existing Pipecat bot
 
 ```python
 import os, asyncio
@@ -50,7 +50,7 @@ async def main() -> None:
         attention_config={"frames_per_turn": 3, "vad_threshold": 0.5},
     )
 
-    # 3. Stand up your Pipecat pipeline — unchanged from your existing setup.
+    # 3. Stand up your Pipecat pipeline, unchanged from your existing setup.
     transport = DailyTransport(
         "https://your-org.daily.co/sess-xyz",
         your_user_token,
@@ -64,12 +64,12 @@ async def main() -> None:
     )
 
     # 4. Attach the engine. Pass the PipelineTask so upstream actions
-    #    (mute, set_threshold, ...) can be queued back to the hidden bot.
+    #    (mute, set_threshold, ...) can be queued back to the SAA agent.
     engine = AttentionEngine(transport, agent_identity=session.agent_identity)
 
     @engine.on_prediction
     def _(p):
-        # Gate your STT — only class 2 (talking-to-device) gets through.
+        # Gate your STT, only class 2 (talking-to-device) gets through.
         your_llm_gate.set_enabled(p.aligned_class == 2)
 
     @engine.on_interrupt
@@ -98,10 +98,9 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-That's the full integration. Works with any Pipecat pipeline, cascaded
-or speech-to-speech.
+That's the full integration. Works with any Pipecat pipeline.
 
-## Greenfield — `build_attention_runner`
+## Greenfield: `build_attention_runner`
 
 For new voice agents:
 
@@ -145,7 +144,7 @@ await engine.set_threshold(0.65)     # model class-2 confidence threshold
 ```
 
 Each call constructs a `DailyOutputTransportMessageUrgentFrame` addressed
-to the hidden bot's `participant_id` and queues it onto the bound
+to the SAA agent's `participant_id` and queues it onto the bound
 `PipelineTask`. Pipecat's `DailyTransport` does **not** expose a public
 `send_app_message()`; the frame-queue path is the only supported send
 mechanism. Calls issued before the bot has joined are buffered and
@@ -153,7 +152,7 @@ flushed once its participant id resolves.
 
 ## Data plane
 
-JSON envelopes on the Daily app-message topic `"saa"` — same shapes as
+JSON envelopes on the Daily app-message topic `"saa"`, same shapes as
 [`saa-livekit-client`](https://pypi.org/project/saa-livekit-client/), so
 a single consumer-side event handler can serve both transports:
 
@@ -170,7 +169,7 @@ a single consumer-side event handler can serve both transports:
 | `mute` / `unmute` / `responding_start` / `responding_stop` / `set_threshold` | up | scoped to `participant_id=agent_pid` |
 
 Binary turn payload (PCM + JPEGs) follows the same layout as the
-LiveKit byte-stream variant — see `_wire.py`. Chunk reassembly is handled
+LiveKit byte-stream variant, see `_wire.py`. Chunk reassembly is handled
 inside `AttentionEngine`; consumers see typed events only.
 
 ## Daily Bots compatibility
@@ -184,7 +183,7 @@ and Pipecat Cloud. No extra deployment knobs.
 - Python **3.11+** (pipecat-ai 1.x dropped 3.10 support)
 - `pipecat-ai[daily] >= 1.0.0`
 - `daily-python >= 0.19.0`
-- **macOS / Linux / WSL2 only** — daily-python ships no Windows wheels.
+- **macOS / Linux / WSL2 only**, daily-python ships no Windows wheels.
 - Daily room URL must be publicly reachable from our cloud (no private VPC)
 - Audio + video tracks must both be available (the model is multimodal)
 - Customer voice agent and hosted attention bot share the same Daily room
