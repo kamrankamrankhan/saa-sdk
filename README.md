@@ -62,6 +62,8 @@ A voice agent's microphone hears every voice in the room: yours, a coworker's, t
 | **Pipecat (Daily)** | [`saa-pipecat-client`](./packages/saa-pipecat-client) | you run a [Pipecat](https://github.com/pipecat-ai/pipecat) voice agent on Daily. SAA joins your Daily room and gates the pipeline through the `"saa"` app-message topic. |
 | **ElevenLabs** | [`attenlabs-saa`](./packages/saa-py) | you run an [ElevenLabs Conversational AI](./examples/elevenlabs) agent. SAA gates it via the streaming SDK's `feed_audio` (its room is sealed, so SAA can't join it directly). |
 
+Twilio is on the [roadmap](#roadmap).
+
 ## Install
 
 ```bash
@@ -169,6 +171,10 @@ SAA is the addressee decision that sits between your VAD and STT. It can complem
 ## On-device deployment
 
 The open SDKs stream to the SAA cloud. For deployments where audio must stay on the device (telephony, embedded systems, wearables, robotics, kiosks) direct on-device licensing is available. Contact us via [this link](https://attentionlabs.ai/#contact).
+
+## Roadmap
+
+- **Twilio Media Streams**: a telephony bridge that gates inbound call audio (μ-law 8 kHz to PCM16) by feeding it to SAA with `feed_audio(..., sample_rate=8000)`.
 
 ## Documentation
 
