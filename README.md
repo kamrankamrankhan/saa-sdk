@@ -10,7 +10,7 @@ Adds attention-aware gating, barge-in, and proactive interjection to any LiveKit
 pip install saa-livekit-client
 ```
 
-## Quickstart — existing voice agent
+## Quickstart: existing voice agent
 
 ```python
 import asyncio
@@ -60,7 +60,7 @@ async def entrypoint(ctx: JobContext):
 
     @engine.on_prediction
     def _(p):
-        # gate the mic — only class 2 (talking-to-device) reaches the model
+        # gate the mic, only class 2 (talking-to-device) reaches the model
         voice.input.set_audio_enabled(p.aligned_class == 2)
 
     @engine.on_interrupt
@@ -71,7 +71,7 @@ async def entrypoint(ctx: JobContext):
     async def _(ev):
         await voice.generate_reply(instructions="Briefly offer to help")
 
-    # tell saa when the agent is speaking — arms interrupt, suppresses interjection
+    # tell saa when the agent is speaking, arms interrupt, suppresses interjection
     @voice.on("agent_state_changed")
     def _(ev):
         if ev.new_state == "speaking":
@@ -86,11 +86,11 @@ if __name__ == "__main__":
     cli.run_app(server)
 ```
 
-That's the whole integration. Works with cascaded pipelines AND `RealtimeModel`
+That's the whole integration. Works with any LiveKit pipeline, including `RealtimeModel`
 speech-to-speech. Runnable variants are in the [`examples/livekit/`](https://github.com/attenlabs/saa-sdk/tree/main/examples/livekit)
-samples. (`WorkerOptions(entrypoint_fnc=...)` also works on 1.5.x — the older idiom.)
+samples. (`WorkerOptions(entrypoint_fnc=...)` also works on 1.5.x, the older idiom.)
 
-## Greenfield — `build_attention_entrypoint`
+## Greenfield, `build_attention_entrypoint`
 
 For new voice agents that don't have an existing pipeline:
 
@@ -121,8 +121,8 @@ Environment: `SAA_API_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_UR
 |---|---|---|
 | `PredictionEvent` | every 250 ms | `raw_class`, `aligned_class` (0/1/2), `confidence`, `source`, `num_faces`, `responding` |
 | `VADEvent` | every 250 ms | `is_speech`, `probability` |
-| warmup | model warmed up, predictions begin | — |
-| listening_start / listening_cancelled | state edges | — |
+| warmup | model warmed up, predictions begin | none |
+| listening_start / listening_cancelled | state edges | none |
 | `TurnReadyEvent` | end of user turn | `audio_pcm16`, `duration`, `frames`, `context` |
 | `InterruptEvent` | user barges in during AI playback | `confidence` |
 | `InterjectionEvent` | humans went quiet after side-chat | `reason`, `audio_pcm16`, `duration` |
@@ -142,7 +142,7 @@ await attention.responding_stop()
 await attention.set_threshold(0.65)          # model class-2 confidence threshold
 ```
 
-These are routed only to the hidden agent (`destination_identities=[...]`)
+These are routed only to the SAA agent (`destination_identities=[...]`)
 so they never leak to other room participants.
 
 ## Requirements
