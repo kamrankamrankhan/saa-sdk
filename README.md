@@ -2,7 +2,7 @@
 
 Python SDK for [Attention Labs](https://attentionlabs.ai) real-time selective auditory attention.
 
-Every voice pipeline has the same problem: the microphone hears everything, but your ASR should only process speech directed at the device. Wake words solve this with a rigid trigger phrase. SAA solves it without one — classifying every audio frame as **silent**, **human-directed**, or **device-directed** and routing only what matters.
+Every voice pipeline has the same problem: the microphone hears everything, but your ASR should only process speech directed at the device. Wake words solve this with a rigid trigger phrase. SAA solves it without one, classifying every audio frame as **silent**, **human-directed**, or **device-directed** and routing only what matters.
 
 `attenlabs-saa` streams mic and webcam data to the SAA inference server over WebSocket and emits typed events: attention predictions, voice activity, conversation state, and ready-to-forward speech audio. LLM routing is left to you.
 
@@ -35,8 +35,8 @@ def _(event):
 
 @client.on_turn_ready
 def _(turn):
-    # turn.audio_base64 — base64 PCM16 @ 16 kHz mono, ready for OpenAI Realtime / any LLM
-    # turn.audio_pcm16  — same audio as np.int16 array
+    # turn.audio_base64, base64 PCM16 @ 16 kHz mono, ready for OpenAI Realtime / any LLM
+    # turn.audio_pcm16, same audio as np.int16 array
     print(f"turn ready ({turn.duration_sec:.2f}s)")
 
 @client.on_error
@@ -63,7 +63,7 @@ A full CLI demo wiring SAA + OpenAI Realtime lives at [**saa-py-demo**](https://
 from saa import AttentionClient, CameraConfig, MicConfig
 
 client = AttentionClient(
-    token="...",                    # API key — sent as WS subprotocol
+    token="...",                    # API key, sent as WS subprotocol
     url=None,                      # Server URL (default: https://broker.attentionlabs.ai)
     video=CameraConfig(),          # Webcam config
     audio=MicConfig(),             # Mic config
@@ -90,7 +90,7 @@ client = AttentionClient(
 | `device_index` | `int` | `0`     | Webcam device index           |
 | `width`        | `int` | `1920`  | Capture width                 |
 | `height`       | `int` | `1080`  | Capture height                |
-| `jpeg_quality` | `int` | `60`    | JPEG compression quality 0–100 |
+| `jpeg_quality` | `int` | `60`    | JPEG compression quality 0-100 |
 
 ### Methods
 
@@ -107,7 +107,7 @@ client = AttentionClient(
 
 ### Feeding external audio
 
-When another stack already owns the microphone — an ElevenLabs / OpenAI Realtime `AudioInterface` tap, a Twilio media stream, a game engine — construct the client with `enable_audio=False` and push frames in with `feed_audio()` instead of letting the SDK open its own mic:
+When another stack already owns the microphone, an ElevenLabs / OpenAI Realtime `AudioInterface` tap, a Twilio media stream, a game engine, construct the client with `enable_audio=False` and push frames in with `feed_audio()` instead of letting the SDK open its own mic:
 
 ```python
 client = AttentionClient(token="...", enable_audio=False, enable_video=False)
@@ -119,7 +119,7 @@ client.feed_audio(pcm_chunk)         # bytes (int16 LE), np.int16, or np.float32
 
 `feed_audio` accepts arbitrary chunk sizes and re-chunks internally to the wire's 100 ms blocks; pass `sample_rate=` if your audio isn't already 16 kHz and it'll resample. Calling it while `enable_audio=True` raises (that would double the audio source). A runnable ElevenLabs Conversational AI example lives in [`saa-sdk/examples/elevenlabs`](https://github.com/attenlabs/saa-sdk/tree/main/examples/elevenlabs).
 
-Frames work the same way — construct with `enable_video=False` and push with `feed_video()`:
+Frames work the same way, construct with `enable_video=False` and push with `feed_video()`:
 
 ```python
 client = AttentionClient(token="...", enable_video=False)
@@ -144,9 +144,9 @@ def handle(event):
 
 | decorator             | payload                                                                  | fires when                              |
 | --------------------- | ------------------------------------------------------------------------ | --------------------------------------- |
-| `@on_connected`       | —                                                                        | WebSocket opens                         |
-| `@on_started`         | —                                                                        | Server has loaded the model             |
-| `@on_warmup_complete` | —                                                                        | Model warmed up and producing predictions |
+| `@on_connected`       | none                                                                        | WebSocket opens                         |
+| `@on_started`         | none                                                                        | Server has loaded the model             |
+| `@on_warmup_complete` | none                                                                        | Model warmed up and producing predictions |
 | `@on_prediction`      | `PredictionEvent`                                                        | Each attention prediction               |
 | `@on_vad`             | `VadEvent`                                                               | Voice activity update                   |
 | `@on_state`           | `StateEvent`                                                             | Conversation state transition           |
@@ -218,7 +218,7 @@ confidence: float   # raw model confidence of the class-2 prediction that fired
 
 Fires when the server detects the user trying to take the turn back while
 the LLM is mid-response. The server has already moved its state machine to
-`listening` and pre-rolled the user's recent audio into the next turn — the
+`listening` and pre-rolled the user's recent audio into the next turn, the
 following `turn_ready` event will carry the actual barge-in question. The
 consumer's job is to (a) fade and stop its local LLM playback over
 `fade_ms`, (b) cancel any in-flight LLM response, and (c) re-open the mic
@@ -258,7 +258,7 @@ was_clean: bool  # True if code == 1000
 
 ## LLM integration
 
-LLM routing is intentionally **not** part of the SDK. The `turn_ready` event hands you PCM16 audio — both as a NumPy array and as base64 — forward it wherever you like.
+LLM routing is intentionally **not** part of the SDK. The `turn_ready` event hands you PCM16 audio, both as a NumPy array and as base64, forward it wherever you like.
 
 When your LLM starts generating, call `mute()` + `mark_responding(True)` to suppress predictions during playback. When it finishes, `unmute()` + `mark_responding(False)`.
 
@@ -292,7 +292,7 @@ your LLM playback layer, then re-open the mic immediately:
 def _(event):
     # Fade your local LLM audio and cancel its in-flight response.
     your_llm.interrupt(event.fade_ms)
-    # Re-open the mic immediately — do NOT wait for the fade to finish,
+    # Re-open the mic immediately, do NOT wait for the fade to finish,
     # or the user's continued speech is dropped for the fade duration.
     client.unmute()
     client.mark_responding(False)
@@ -316,7 +316,7 @@ The SDK manages four threads internally:
 | `saa-camera`     | JPEG capture at 4 fps (250 ms)     |
 | *(sounddevice)*  | Audio callback at native sample rate, resampled to 16 kHz |
 
-All event callbacks fire on `saa-ws` or `saa-heartbeat`. Don't block them — offload heavy work to your own thread.
+All event callbacks fire on `saa-ws` or `saa-heartbeat`. Don't block them, offload heavy work to your own thread.
 
 ## License
 
