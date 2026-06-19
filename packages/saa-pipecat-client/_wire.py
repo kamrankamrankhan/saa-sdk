@@ -33,7 +33,7 @@ class ParsedTurnPayload:
 
 
 def parse_turn_payload(buf: bytes) -> ParsedTurnPayload:
-    """Decode a turn payload received via LiveKit byte stream.
+    """Decode a turn payload received over the Daily app-message channel.
 
     Raises TurnPayloadError on truncation or invalid length fields.
     """

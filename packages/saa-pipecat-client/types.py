@@ -1,8 +1,8 @@
 """Typed event payloads emitted by AttentionEngine callbacks.
 
-These mirror the JSON envelopes published on the LiveKit data channel topic
-"saa" by the hosted attention agent. The engine parses incoming JSON into
-these dataclasses and hands them to the consumer's callbacks.
+These mirror the JSON envelopes published on the Daily app-message channel
+topic "saa" by the hosted attention agent. The engine parses incoming JSON
+into these dataclasses and hands them to the consumer's callbacks.
 
 Stable surface — keep field names backward-compatible across minor versions.
 """

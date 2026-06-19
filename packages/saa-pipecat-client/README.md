@@ -123,15 +123,18 @@ Environment: `SAA_API_KEY`, `DAILY_API_KEY`.
 
 | Event | Fires | Payload |
 |---|---|---|
-| `PredictionEvent` | every 250 ms | `raw_class`, `aligned_class` (0/1/2), `confidence`, `source`, `num_faces` |
+| `PredictionEvent` | every 250 ms | `raw_class`, `aligned_class` (0/1/2), `confidence`, `source`, `num_faces`, `responding` |
 | `VADEvent` | every 250 ms | `is_speech`, `probability` |
+| warmup | model warmed up, predictions begin | — |
 | listening_start / listening_cancelled | state edges | — |
 | `TurnReadyEvent` | end of user turn | `audio_pcm16`, `duration`, `frames`, `context` |
 | `InterruptEvent` | user barges in during AI playback | `confidence` |
 | `InterjectionEvent` | humans went quiet after side-chat | `reason`, `audio_pcm16`, `duration` |
 | `ErrorEvent` | out-of-band errors | `code`, `message` |
 
-Classes: `0`=silent, `1`=human-to-human, `2`=human-to-device.
+Classes: `0`=silent, `1`=human-to-human, `2`=human-to-device. `responding` is `True` while the AI is mid-playback.
+
+Each is delivered through an `@engine.on_*` callback: `on_prediction`, `on_vad`, `on_warmup`, `on_listening_start`, `on_listening_cancelled`, `on_turn_ready`, `on_interrupt`, `on_interjection`, `on_error`.
 
 ## Upstream actions
 
@@ -168,8 +171,8 @@ a single consumer-side event handler can serve both transports:
 | `error` | down | `code`, `message` |
 | `mute` / `unmute` / `responding_start` / `responding_stop` / `set_threshold` | up | scoped to `participant_id=agent_pid` |
 
-Binary turn payload (PCM + JPEGs) follows the same layout as the
-LiveKit byte-stream variant, see `_wire.py`. Chunk reassembly is handled
+Binary turn payload (PCM + JPEGs) uses the same layout as
+`saa-livekit-client`, see `_wire.py`. Chunk reassembly is handled
 inside `AttentionEngine`; consumers see typed events only.
 
 ## Daily Bots compatibility
@@ -190,8 +193,8 @@ and Pipecat Cloud. No extra deployment knobs.
 
 ## Docs
 
-- Integration spec: [docs/daily-integration.md](https://github.com/attenlabs/saa-sdk/blob/main/docs/daily-integration.md)
-- Example bot: [`examples/pipecat/voice_agent/`](https://github.com/attenlabs/saa-sdk/tree/main/examples/pipecat/voice_agent)
+- Integration guide: [attentionlabs.ai/docs/integrations/pipecat](https://attentionlabs.ai/docs/integrations/pipecat)
+- Examples: [`examples/pipecat/`](https://github.com/attenlabs/saa-sdk/tree/main/examples/pipecat)
 
 ## License
 

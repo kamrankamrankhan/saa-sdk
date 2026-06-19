@@ -110,9 +110,9 @@ async def start_attention_session(
                               via `attention_agent_token(...)`.
         participant_identity: `user_name` of the human user whose tracks the
                               bot should analyze.
-        attention_config:     Optional config overrides — vetted subset only.
-                              See docs/daily-integration.md for the public
-                              field list. Unknown fields are silently ignored.
+        attention_config:     Optional config overrides (vetted subset only).
+                              See https://attentionlabs.ai/docs/integrations/pipecat
+                              for the public field list. Unknown fields are silently ignored.
         api_base:             Override the API base URL (testing / private envs).
         timeout:              HTTP timeout for the POST call.
     """
