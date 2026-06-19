@@ -6,10 +6,8 @@ Adds attention-aware gating, barge-in, and proactive interjection to any
 Pipecat voice agent running on Daily, including bots deployed to
 [Daily Bots](https://docs.dailybots.ai/architecture) and Pipecat Cloud.
 
-The attention processor runs on our backend. Consumers do **not** deploy
-ONNX, MediaPipe, Whisper, or any model weights. They do not run our SDK
-in their process. They integrate by minting a hidden-bot meeting token,
-calling our REST endpoint, and listening for typed events.
+The attention model runs on Attention Labs' service, so this client is a thin consumer to install. You integrate by
+minting a Daily meeting token, starting a session, and listening for typed events.
 
 ## Install
 
@@ -125,8 +123,8 @@ Environment: `SAA_API_KEY`, `DAILY_API_KEY`.
 |---|---|---|
 | `PredictionEvent` | every 250 ms | `raw_class`, `aligned_class` (0/1/2), `confidence`, `source`, `num_faces`, `responding` |
 | `VADEvent` | every 250 ms | `is_speech`, `probability` |
-| warmup | model warmed up, predictions begin | — |
-| listening_start / listening_cancelled | state edges | — |
+| warmup | model warmed up, predictions begin | none |
+| listening_start / listening_cancelled | state edges | none |
 | `TurnReadyEvent` | end of user turn | `audio_pcm16`, `duration`, `frames`, `context` |
 | `InterruptEvent` | user barges in during AI playback | `confidence` |
 | `InterjectionEvent` | humans went quiet after side-chat | `reason`, `audio_pcm16`, `duration` |
