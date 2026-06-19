@@ -121,8 +121,8 @@ Environment: `SAA_API_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_UR
 |---|---|---|
 | `PredictionEvent` | every 250 ms | `raw_class`, `aligned_class` (0/1/2), `confidence`, `source`, `num_faces`, `responding` |
 | `VADEvent` | every 250 ms | `is_speech`, `probability` |
-| warmup | model warmed up, predictions begin | — |
-| listening_start / listening_cancelled | state edges | — |
+| warmup | model warmed up, predictions begin | none |
+| listening_start / listening_cancelled | state edges | none |
 | `TurnReadyEvent` | end of user turn | `audio_pcm16`, `duration`, `frames`, `context` |
 | `InterruptEvent` | user barges in during AI playback | `confidence` |
 | `InterjectionEvent` | humans went quiet after side-chat | `reason`, `audio_pcm16`, `duration` |
