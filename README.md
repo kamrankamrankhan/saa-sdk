@@ -4,7 +4,7 @@
 
 <h3 align="center">Tells your voice agent which speech is actually for it.</h3>
 
-<p align="center">One decision per utterance: only addressee speech reaches your STT, LLM, and TTS. No wake word required.</p>
+<p align="center">One decision per utterance: only addressee speech reaches your STT, LLM, and TTS. No wake word.</p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@attenlabs/saa-js"><img alt="npm" src="https://img.shields.io/npm/v/@attenlabs/saa-js?label=npm&color=D9FF00&labelColor=060d0f&style=for-the-badge"></a>
@@ -161,7 +161,7 @@ The streaming SDKs expose `markResponding(true)` / `mark_responding(True)` so th
 
 ## How it composes
 
-SAA is the addressee decision that sits between your VAD and STT. It can complement your wakeword system or replace it.
+SAA is the model-agnostic addressee decision that sits between your VAD and STT. It can complement your wakeword system or replace it.
 
 <p align="center">
   <img alt="Where SAA sits in your voice stack: noise suppression and VAD upstream, SAA addressee gate, then STT → LLM → TTS downstream" src="./assets/diagrams/where-saa-sits-dark.svg" width="820">
@@ -169,7 +169,7 @@ SAA is the addressee decision that sits between your VAD and STT. It can complem
 
 ## On-device deployment
 
-The open SDKs stream to the SAA cloud. For deployments where audio must stay on the device (telephony, embedded systems, wearables, robotics, kiosks) direct on-device licensing is available. Contact us via [this link](https://attentionlabs.ai/#contact).
+The open SDKs stream to the SAA cloud. For deployments where audio must stay on the device (telephony, embedded systems, wearables, robotics, kiosks), request on-device and embedded access at [attentionlabs.ai](https://attentionlabs.ai/#contact).
 
 ## Roadmap
 
