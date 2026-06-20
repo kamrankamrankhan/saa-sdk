@@ -45,7 +45,7 @@ await client.start({ videoElement: videoEl });
 | `serverProfile`    | string   | inferred                             | Server processor variant. Defaults to `"audio_only"` when `enableVideo: false`, else the full processor. Pass `"default"` to force the full processor without local video. |
 | `video.width`      | number   | `1920`                               | Capture width. |
 | `video.height`     | number   | `1080`                               | Capture height. |
-| `video.jpegQuality`| number   | `0.6`                                | JPEG quality (0-1). |
+| `video.jpegQuality`| number   | `0.5`                                | JPEG quality (0-1). |
 
 ## Methods
 
@@ -116,4 +116,4 @@ Mix and match: `enableVideo: false` with internal mic for audio-only, or
 
 ## License
 
-Apache-2.0
+MIT

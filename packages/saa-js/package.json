@@ -36,7 +36,7 @@
     "realtime",
     "websocket"
   ],
-  "license": "Apache-2.0",
+  "license": "MIT",
   "devDependencies": {
     "typescript": "^5.4.0"
   }

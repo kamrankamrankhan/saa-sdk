@@ -90,7 +90,7 @@ client = AttentionClient(
 | `device_index` | `int` | `0`     | Webcam device index           |
 | `width`        | `int` | `1920`  | Capture width                 |
 | `height`       | `int` | `1080`  | Capture height                |
-| `jpeg_quality` | `int` | `60`    | JPEG compression quality 0-100 |
+| `jpeg_quality` | `int` | `50`    | JPEG compression quality 0-100 |
 
 ### Methods
 
@@ -320,4 +320,4 @@ All event callbacks fire on `saa-ws` or `saa-heartbeat`. Don't block them, offlo
 
 ## License
 
-Apache-2.0
+MIT
