@@ -1,22 +1,22 @@
-# SAA + Twilio Media Streams — `media_streams/`
+# SAA + Twilio Media Streams: `media_streams/`
 
 `server.py` is the bidirectional Twilio Media Streams adapter. It exposes:
 
 | Route | Method | Purpose |
-|-------|--------|---------|
-| `/voice` | POST | TwiML webhook — returns `<Connect><Stream>` pointing at `/twilio` |
+|---|---|---|
+| `/voice` | POST | TwiML webhook. Returns `<Connect><Stream>` pointing at `/twilio` |
 | `/voice/outbound` | POST | TwiML for outbound calls placed via `outbound.py` |
-| `/twilio` | WebSocket | Bidirectional Media Streams handler — SAA gating lives here |
+| `/twilio` | WebSocket | Bidirectional Media Streams handler. SAA gating lives here |
 | `/twilio-status` | POST | Call-status callbacks (initiated / ringing / answered / completed) |
-| `/health` | GET | Liveness probe — returns `ok` |
-| `/ready` | GET | Readiness probe — 200 once `SAA_API_KEY` is set, 503 otherwise |
+| `/health` | GET | Liveness probe. Returns `ok` |
+| `/ready` | GET | Readiness probe. 200 once `SAA_API_KEY` is set, 503 otherwise |
 | `/stats` | GET | Prometheus-shaped aggregate counters (calls, audio bytes, barge-ins) |
 
 ## Bridges
 
 | Bridge | File | Extra deps |
-|--------|------|------------|
-| `LoggingBridge` | `bridge.py` | none — good for smoke-testing the adapter |
+|---|---|---|
+| `LoggingBridge` | `bridge.py` | none, good for smoke-testing the adapter |
 | `OpenAIRealtimeBridge` | `bridge_openai_realtime.py` | `websockets>=12`, `openai>=1.0` |
 | `DeepgramOpenAIElevenLabsBridge` | `bridge_deepgram_openai_elevenlabs.py` | `openai>=1.0`, `deepgram-sdk>=3`, `elevenlabs>=1.0` |
 
@@ -53,7 +53,7 @@ Twilio needs a publicly reachable URL for the `/voice` webhook and for the
 ngrok http 8765
 ```
 
-Copy the `https://…ngrok-free.app` hostname (without the `https://` scheme)
+Copy the `https://<id>.ngrok-free.app` hostname (without the `https://` scheme)
 into your `.env`:
 
 ```

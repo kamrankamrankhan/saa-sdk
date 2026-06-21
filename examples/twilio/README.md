@@ -1,20 +1,20 @@
 # SAA + Twilio Media Streams
 
-SAA is a pre-STT addressee gate for inbound and outbound phone calls over Twilio Media Streams. The adapter in `media_streams/server.py` receives the raw telephony stream from Twilio, transcodes μ-law 8 kHz frames to PCM16 16 kHz, and feeds them to SAA's `feed_audio` API. Only device-directed speech — the audio the caller actually meant for your agent — ever reaches your STT, LLM, or TTS. Side talk, hold music, and the agent's own TTS echo are gated out before they cost you a single token.
+SAA is a pre-STT device-directed gate for inbound and outbound phone calls over Twilio Media Streams. The adapter in `media_streams/server.py` receives the raw telephony stream from Twilio, transcodes μ-law 8 kHz frames to PCM16 16 kHz, and feeds them to SAA's `feed_audio` API. Only device-directed speech reaches your STT, LLM, or TTS; side talk, hold music, and the agent's own TTS echo are gated out.
 
 ## How SAA integrates
 
 1. Twilio `<Connect><Stream>` opens a WebSocket to `server.py`'s `/twilio` endpoint.
-2. `server.py` receives inbound `media` events containing base64-encoded G.711 μ-law @ 8 kHz, decodes them with the pure-NumPy codec in `audio.py`, and upsamples to PCM16 16 kHz.
-3. Decoded frames are fed to the SAA gate via `attenlabs-saa`'s `feed_audio()`. The `AttentionClient` is constructed with `enable_audio=False, enable_video=False` — the SDK never opens the host's microphone or camera; Twilio audio is the only source.
+2. `server.py` receives inbound `media` events containing base64-encoded G.711 μ-law @ 8 kHz, decodes them with the codec in `audio.py`, and upsamples to PCM16 16 kHz.
+3. Decoded frames are fed to the SAA gate via `attenlabs-saa`'s `feed_audio()`. The `AttentionClient` is constructed with `enable_audio=False, enable_video=False`, so the SDK never opens the host's microphone or camera; Twilio audio is the only source.
 4. `@saa.on_turn_ready` fires when SAA has collected a complete, device-directed utterance. The adapter dispatches it to your `Bridge.on_speech()` implementation for STT / LLM / TTS.
-5. TTS audio from the bridge flows back through the adapter's paced outbound sender (20 ms cadence) as μ-law @ 8 kHz `media` events, completing the round trip to the caller's ear.
-6. `mark_responding(True/False)` is driven automatically when bytes start and stop flowing through the outbound queue, so SAA suppresses predictions during the agent's own TTS playback — preventing the carrier echo from re-triggering the gate.
+5. TTS audio from the bridge flows back through the adapter's paced outbound sender (20 ms cadence) as μ-law @ 8 kHz `media` events.
+6. `mark_responding(True/False)` is driven automatically when bytes start and stop flowing through the outbound queue, so SAA suppresses predictions during the agent's own TTS playback, preventing the carrier echo from re-triggering the gate.
 
 ## Samples
 
 | Sample | Description | Run |
-|--------|-------------|-----|
+|---|---|---|
 | [media_streams/](./media_streams) | Twilio Media Streams call, SAA-gated via `feed_audio` | `python -m uvicorn server:app --port 8765` |
 
 ## Quick start
@@ -38,7 +38,7 @@ In a second terminal, expose the server via ngrok:
 ngrok http 8765
 ```
 
-Copy the ngrok hostname (no `https://` scheme) into `.env` as `PUBLIC_HOSTNAME`, then point your Twilio phone number's **Voice webhook** at `https://<PUBLIC_HOSTNAME>/voice`. Call the number — you will see SAA-gated `[bridge] turnReady` log lines when the caller speaks to the device.
+Copy the ngrok hostname (no `https://` scheme) into `.env` as `PUBLIC_HOSTNAME`, then point your Twilio phone number's **Voice webhook** at `https://<PUBLIC_HOSTNAME>/voice`. Call the number and you will see SAA-gated `[bridge] turnReady` log lines when the caller speaks to the device.
 
 ## The lines that integrate SAA
 
@@ -47,7 +47,7 @@ from saa import AttentionClient
 
 saa = AttentionClient(
     token=os.environ["SAA_API_KEY"],
-    enable_audio=False,   # no mic — Twilio audio fed manually
+    enable_audio=False,   # no mic, Twilio audio fed manually
     enable_video=False,   # phone calls have no video track
     initial_threshold=float(os.environ.get("SAA_THRESHOLD", "0.7")),
 )
@@ -72,11 +72,11 @@ await session.mark_responding(False)  # after the outbound queue drains
 One env file, [`.env.example`](./.env.example) in this directory:
 
 | Variable | Purpose |
-|----------|---------|
-| `SAA_API_KEY` | SAA authentication token — get one at [attentionlabs.ai/dashboard](https://attentionlabs.ai/dashboard) |
+|---|---|
+| `SAA_API_KEY` | SAA authentication token, get one at [attentionlabs.ai/dashboard](https://attentionlabs.ai/dashboard) |
 | `SAA_THRESHOLD` | Gate sensitivity, 0..1 (default `0.7`) |
-| `TWILIO_ACCOUNT_SID` | Twilio account SID — used for webhook signature validation |
-| `TWILIO_AUTH_TOKEN` | Twilio auth token — required for `X-Twilio-Signature` validation and outbound REST calls |
+| `TWILIO_ACCOUNT_SID` | Twilio account SID, used for webhook signature validation |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token, required for `X-Twilio-Signature` validation and outbound REST calls |
 | `TWILIO_FROM_NUMBER` | E.164 number for outbound calls placed via `outbound.py` |
 | `PUBLIC_HOSTNAME` | ngrok host or load-balancer hostname **without** the `https://` scheme |
 | `OPENAI_API_KEY` | Required for `OpenAIRealtimeBridge` |
@@ -85,8 +85,8 @@ One env file, [`.env.example`](./.env.example) in this directory:
 
 ## Requirements & limitations
 
-- **Audio-only.** Phone calls have no video track. SAA runs in audio-only mode (`enable_video=False`), which means the visual gaze cue that separates "talking to the device" from "talking to a person in the room" is not available. Telephony is therefore a weaker showcase for SAA's addressee classification than an in-room multimodal deployment (robot, kiosk, laptop).
-- **Narrowband signal.** Twilio PSTN audio is μ-law G.711 @ 8 kHz, band-limited to ~3.4 kHz. SAA's model was trained on wideband audio; the narrowband codec is out-of-distribution and degrades classification confidence compared to a 16 kHz microphone feed.
-- **Call quality dependence.** Reliability tracks carrier signal quality. A lossy or heavily compressed leg (VoIP → PSTN handoff, weak cellular, echo-heavy room) degrades the PCM fed to SAA and can raise the false-reject rate.
-- **End-of-turn latency.** The adapter accumulates Twilio's 20 ms inbound frames into 100 ms SAA frames before forwarding. SAA's turn accumulator adds additional latency; under continuous cross-talk the server-side max-turn cap can fire and cut off very long utterances.
-- **Signature validation is optional in dev.** `X-Twilio-Signature` is validated only when `TWILIO_AUTH_TOKEN` is set. Always set it in production — an unsigned POST to `/voice` is enough for an attacker to redirect callers to a stream URL of their choice.
+- **Audio-only.** Phone calls have no video track. SAA runs in audio-only mode (`enable_video=False`), which means the visual signal that separates device-directed speech from talking to a person in the room is not available. Telephony is therefore a weaker showcase for SAA's device-directed classification than an in-room multimodal deployment (robot, kiosk, laptop).
+- **Narrowband signal.** Twilio PSTN audio is μ-law G.711 @ 8 kHz, band-limited to ~3.4 kHz. SAA performs best on wideband audio, so narrowband telephony degrades classification confidence compared to a 16 kHz microphone feed.
+- **Call quality dependence.** Reliability tracks carrier signal quality. A lossy or heavily compressed leg (VoIP -> PSTN handoff, weak cellular, echo-heavy room) degrades the PCM fed to SAA and can raise the false-reject rate.
+- **End-of-turn latency.** The adapter accumulates Twilio's 20 ms inbound frames into 100 ms SAA frames before forwarding. SAA's turn accumulator adds additional latency; under continuous cross-talk very long utterances may be cut off at the maximum turn length.
+- **Signature validation is optional in dev.** `X-Twilio-Signature` is validated only when `TWILIO_AUTH_TOKEN` is set. Always set it in production; an unsigned POST to `/voice` is enough for an attacker to redirect callers to a stream URL of their choice.
