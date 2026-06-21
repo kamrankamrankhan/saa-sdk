@@ -13,6 +13,7 @@ dependencies = [
     "attenlabs-saa>=0.6.0",
     "cv2-enumerate-cameras",
     "simpleaudio",
+    "sounddevice",
 ]
 
 [tool.setuptools]
