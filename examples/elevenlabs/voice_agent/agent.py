@@ -6,7 +6,6 @@
 # answers side conversations, while its own VAD still endpoints and replies.
 # While muted it also pings ElevenLabs' reset-turn-timeout so the agent doesn't re-prompt
 # Logs prediction / responding / send state so the gating can be observed (no TUI).
-import argparse
 import logging
 import os
 import threading
