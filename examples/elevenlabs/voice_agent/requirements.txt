@@ -1,4 +1,4 @@
-# tested against elevenlabs 2.52.0, attenlabs-saa 0.4.0 (feed_audio)
+# tested against elevenlabs 2.52.0, attenlabs-saa 0.6.0 (feed_audio)
 elevenlabs[pyaudio]>=2.45
-attenlabs-saa>=0.4.0   # feed_audio ingestion; installed via `pip install -e ../../../packages/saa-py`
+attenlabs-saa>=0.6.0   # feed_audio ingestion; installed via `pip install -e ../../../packages/saa-py`
 python-dotenv>=1.0

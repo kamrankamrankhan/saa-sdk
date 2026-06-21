@@ -1,0 +1,9 @@
+attenlabs-saa>=0.6.1
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.30,<1.0
+numpy>=1.24
+twilio>=9.0,<10.0
+python-dotenv>=1.0.0
+
+# OpenAIRealtimeBridge: pip install 'websockets>=12' 'openai>=1.0'
+# DeepgramOpenAIElevenLabsBridge: pip install 'openai>=1.0' 'deepgram-sdk>=3' 'elevenlabs>=1.0'
