@@ -29,7 +29,7 @@ Each example under [`examples/`](./examples/) has its own `README.md` with run i
 ## What we do not accept
 
 - Bundled audio, video, or model artifacts (`*.wav`, `*.mp3`, `*.mp4`, `*.onnx`, `*.pt`, `*.tflite`, etc.). Telemetry of internal recordings is out of scope for this repository.
-- Re-introducing the shapes intentionally not part of this repo (see [`CLAUDE.md`](./CLAUDE.md) for the list). A meaningful new feature is welcome; resurrecting an excluded surface is not.
+- Re-introducing the shapes intentionally not part of this repo. A meaningful new feature is welcome; resurrecting an excluded surface is not.
 - Cross-vendor benchmark tables or invented performance numbers. SAA's operating-point numbers are not published in this repo; don't add benchmark tables here.
 
 ## Style
