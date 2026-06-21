@@ -1,19 +1,19 @@
-"""Composable STT + LLM + TTS bridge: Deepgram → OpenAI Chat → ElevenLabs.
+"""STT + LLM + TTS bridge: Deepgram, OpenAI Chat, ElevenLabs.
 
-When the OpenAI Realtime model isn't the right fit (different STT/TTS
-vendor mandates, model selection, on-prem latency, language coverage),
-drop in this bridge instead. It demonstrates the canonical three-stage
-pipeline against SAA's gated output:
+Use this bridge when you want a different STT/TTS vendor, model
+selection, on-prem latency, or wider language coverage than the OpenAI
+Realtime model gives you. It runs a three-stage pipeline against SAA's
+gated output:
 
     SAA turn_ready (PCM16 16 kHz)
-        → Deepgram WebSocket STT
-             → OpenAI Chat Completions (streaming)
-                  → ElevenLabs streaming TTS (PCM16 16 kHz)
-                       → adapter outbound queue → Twilio
+        -> Deepgram pre-recorded REST STT
+             -> OpenAI Chat Completions (streaming)
+                  -> ElevenLabs streaming TTS (PCM16 16 kHz)
+                       -> adapter outbound queue -> Twilio
 
 Every SDK call uses the official Python clients (``deepgram-sdk``,
 ``openai``, ``elevenlabs``). All three are optional installs, the bridge
-raises a clear ImportError if the user wires it up without the deps.
+exits with an install hint if the user wires it up without the deps.
 
 Key SAA features exercised:
 
@@ -58,7 +58,7 @@ DEFAULT_SYSTEM_PROMPT = (
 
 
 class DeepgramOpenAIElevenLabsBridge:
-    """Polyglot STT/LLM/TTS bridge.
+    """STT/LLM/TTS bridge.
 
     Each utterance is transcribed by Deepgram, fed as a user turn into a
     streaming OpenAI Chat Completions call, and the LLM's text response is
@@ -136,10 +136,9 @@ class DeepgramOpenAIElevenLabsBridge:
         self._session = session
         self._oai = AsyncOpenAI(api_key=self.oai_key)
         # Deepgram pre-recorded REST is enough at SAA-segmented utterance
-        # lengths (typically 1–6s). Streaming WebSocket STT would let us
-        # start the LLM mid-utterance, but SAA's whole value proposition
-        # is that we ALREADY know the utterance is complete and
-        # device-directed by the time the bridge sees it.
+        # lengths (typically 1-6s). Streaming WebSocket STT would let us
+        # start the LLM mid-utterance, but SAA already delivers a complete,
+        # device-directed utterance, so REST is enough.
         from deepgram import DeepgramClient
         self._dg = DeepgramClient(self.dg_key)
         log.info(
@@ -182,8 +181,8 @@ class DeepgramOpenAIElevenLabsBridge:
         pass
 
     async def on_saa_prediction(self, event) -> None:
-        # Adaptive threshold: if SAA is confident the caller is the
-        # device-target, relax; otherwise tighten.
+        # Adaptive threshold: if SAA is confident the caller is
+        # device-directed, relax; otherwise tighten.
         if self._session is None:
             return
         conf = getattr(event, "confidence", 0.0) or 0.0

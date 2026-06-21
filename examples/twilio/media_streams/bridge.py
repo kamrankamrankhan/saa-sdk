@@ -21,7 +21,7 @@ Outbound TTS audio reaches the caller via two interchangeable channels:
   ``asyncio.Queue``, the adapter paces and chunks for you), or
 * call ``session.send_audio(pcm16_16k)`` directly when you need finer
   control (mid-stream ``clear`` for barge-in, named ``mark`` for playback
-  synchronisation, programmatic hangup).
+  synchronization, programmatic hangup).
 
 This module ships :class:`LoggingBridge` as a reference; the README
 points to ``bridge_openai_realtime.py`` for a full STT/LLM/TTS bridge.
@@ -59,16 +59,16 @@ class CallSession(Protocol):
     once the call has ended.
 
     SAA controls (``mark_responding`` / ``mute`` / ``unmute`` /
-    ``set_threshold``) are the high-leverage telephony hooks documented in
+    ``set_threshold``) are the telephony controls documented in
     the SDK README:
 
-      * ``mark_responding(True)`` while the agent's TTS is playing tells the
-        SAA server to suppress predictions during playback, so SAA does NOT
+      * ``mark_responding(True)`` while the agent's TTS is playing marks the
+        agent as speaking during playback, so SAA does NOT
         fire ``turn_ready`` on its own TTS bleed coming back through the
         carrier echo path. Pair with ``mark_responding(False)`` when the
         agent finishes speaking.
       * ``mute`` / ``unmute`` are the privacy controls, PCM is dropped at
-        the client and never reaches the SAA server while muted.
+        the client and is not sent to SAA while muted.
       * ``set_threshold`` retunes the device-class confidence threshold
         mid-call (raise in noisy environments; lower for quiet callers).
 
@@ -103,7 +103,7 @@ class Bridge(Protocol):
     which side hung up.
 
     Callbacks run on the FastAPI event loop. SAA's own ``turn_ready``
-    fires on the SDK's receive thread; the adapter dispatches it across
+    arrives on a background thread; the adapter dispatches it across
     the loop boundary before ``on_speech`` is awaited, so listeners may
     use any ``asyncio``-compatible API.
     """
