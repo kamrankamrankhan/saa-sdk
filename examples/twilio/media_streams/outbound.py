@@ -1,4 +1,4 @@
-"""Outbound dialer CLI for the SAA × Twilio adapter.
+"""Outbound dialer CLI for the SAA + Twilio adapter.
 
 Uses the Twilio REST API to place an outbound call. Twilio dials the
 called party, then fetches your ``/voice/outbound`` TwiML and connects
@@ -69,7 +69,7 @@ def place_call(
 
 
 def main(argv: Optional[list] = None) -> int:
-    parser = argparse.ArgumentParser(description="Place an outbound call via the SAA × Twilio adapter.")
+    parser = argparse.ArgumentParser(description="Place an outbound call via the SAA + Twilio adapter.")
     parser.add_argument("to", help="E.164 destination number, e.g. +15551112222")
     parser.add_argument("--from", dest="from_number", default=None, help="Caller-ID Twilio number (defaults to TWILIO_FROM_NUMBER).")
     parser.add_argument("--public-hostname", default=None, help="Externally-visible hostname (defaults to PUBLIC_HOSTNAME).")

@@ -7,7 +7,7 @@ two without depending on ``audioop`` (removed in Python 3.13) or scipy.
 
 The codec uses pre-built lookup tables: a 256-entry decoder and a
 65,536-entry encoder. Both directions reduce to a single NumPy index op,
-which is comfortably faster than the audioop C path on Twilio's volume
+which is faster than the audioop C path on Twilio's volume
 (~50 frames/s/call).
 
 References:
@@ -44,7 +44,7 @@ def _build_ulaw_decode_table() -> np.ndarray:
 def _build_ulaw_encode_table() -> np.ndarray:
     table = np.empty(65536, dtype=np.uint8)
     for s in range(-32768, 32768):
-        v = s >> 2  # 16-bit → 14-bit, sign-preserving
+        v = s >> 2  # 16-bit -> 14-bit, sign-preserving
         if v < 0:
             v = -v
             mask = 0x7F
@@ -92,9 +92,9 @@ def pcm16_to_ulaw(pcm16: np.ndarray) -> bytes:
 
 
 def upsample_8k_to_16k(pcm16_8k: np.ndarray) -> np.ndarray:
-    """Linear-interpolation upsample of int16 PCM 8 kHz → 16 kHz.
+    """Linear-interpolation upsample of int16 PCM 8 kHz -> 16 kHz.
 
-    Quality is more than adequate for STT and the SAA classifier; both are
+    Quality is adequate for STT and SAA; both are
     insensitive to the small spectral image linear interpolation leaves
     above 4 kHz. For human-listening fidelity, replace with a polyphase
     FIR via ``scipy.signal.resample_poly``.
@@ -114,7 +114,7 @@ def upsample_8k_to_16k(pcm16_8k: np.ndarray) -> np.ndarray:
 
 
 def downsample_16k_to_8k(pcm16_16k: np.ndarray) -> np.ndarray:
-    """Pair-averaging downsample of int16 PCM 16 kHz → 8 kHz.
+    """Pair-averaging downsample of int16 PCM 16 kHz -> 8 kHz.
 
     Pair averaging is a first-order box filter; it removes most aliasing
     above the 4 kHz Nyquist of the 8 kHz output. Twilio's PSTN carrier

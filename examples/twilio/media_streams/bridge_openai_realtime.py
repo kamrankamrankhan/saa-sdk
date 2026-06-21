@@ -1,26 +1,26 @@
-"""Reference STT/LLM/TTS bridge for the SAA × Twilio adapter.
+"""Reference STT/LLM/TTS bridge for the SAA + Twilio adapter.
 
-This is the production-grade bridge most teams will start from. It wires
+This bridge wires
 SAA-gated utterances (PCM16 @ 16 kHz, already device-directed by the time
 the bridge sees them) straight into OpenAI's Realtime API and forwards
 the streamed audio response back through the adapter's outbound queue,
 where the paced sender ships it to Twilio at 20 ms cadence.
 
-The bridge demonstrates every high-leverage SAA control the SDK exposes:
+The bridge shows the SAA controls the SDK exposes:
 
-* **Pre-ASR gating.** Only ``turn_ready`` payloads are ever sent to the
+* **Pre-ASR gating.** Only ``turn_ready`` payloads are sent to the
   LLM, ambient room speech, hold music, and other-party conversation
-  never burn a token.
+  are not sent.
 * **`mark_responding(True/False)`** is driven automatically by the
   adapter when bytes start / stop flowing through the outbound queue, and
   also asserted manually here the instant Realtime begins generating its
-  reply so the SAA cloud suppresses predictions during the entire
+  reply so SAA suppresses predictions during the entire
   agent-speaking window (not just while audio is playing).
 * **Barge-in.** SAA's ``on_user_speech_started`` event, fired at the
   leading edge of any new device-directed utterance, cancels in-flight
   Realtime responses and flushes Twilio's playback queue.
 * **Adaptive threshold.** SAA's ``stats`` callback is used to nudge the
-  device-class threshold up when the SDK reports a hot inbound rate
+  device-directed threshold up when SAA reports a high inbound rate
   (background chatter) and back down once it settles.
 * **DTMF.** Caller key presses are forwarded to the Realtime session as
   user text so the agent can branch on menu input.
@@ -71,17 +71,17 @@ DEFAULT_SYSTEM_PROMPT = (
     "Speak in a warm, natural cadence."
 )
 
-# SAA delivers PCM16 @ 16 kHz; gpt-realtime-2 requires ≥ 24 kHz.
-# on_speech() upsamples 16 k→24 k before sending to Realtime.
-# Realtime output is also 24 kHz PCM16 — the adapter's paced sender
-# handles the µ-law re-encode for Twilio downstream.
+# SAA delivers PCM16 @ 16 kHz; gpt-realtime-2 requires >= 24 kHz.
+# on_speech() upsamples 16k->24k before sending to Realtime.
+# Realtime output is also 24 kHz PCM16; the adapter's paced sender
+# handles the mu-law re-encode for Twilio downstream.
 REALTIME_INPUT_SAMPLE_RATE = 24_000   # after upsampling
 REALTIME_OUTPUT_SAMPLE_RATE = 24_000
 SAA_INPUT_SAMPLE_RATE = 16_000        # what SAA hands us
 
 # Adaptive-threshold band. SAA defaults to 0.7; the bridge nudges in
 # this window based on traffic from the SAA stats stream. Keeps the
-# adapter from misfiring on cocktail-party calls while staying permissive
+# adapter from misfiring on noisy multi-speaker calls while staying permissive
 # for solo callers.
 ADAPTIVE_THRESHOLD_LOW = 0.65
 ADAPTIVE_THRESHOLD_HIGH = 0.82
@@ -186,7 +186,7 @@ class OpenAIRealtimeBridge:
         # intentionally disabled, SAA is the gate, not Realtime's VAD.
         # NOTE: The gpt-realtime-2 API requires nested audio config and
         # a minimum sample rate of 24000 Hz. Voice is under audio.output.
-        # SAA delivers 16 kHz; on_speech() upsamples 16k→24k before send.
+        # SAA delivers 16 kHz; on_speech() upsamples 16k->24k before send.
         await self._send_json({
             "type": "session.update",
             "session": {
@@ -232,14 +232,14 @@ class OpenAIRealtimeBridge:
             self._state.cancellations,
         )
 
-    # ── SAA → Realtime ─────────────────────────────────────
+    # ── SAA -> Realtime ─────────────────────────────────────
 
     async def on_speech(self, audio_pcm16_16k: np.ndarray, duration_sec: float) -> None:
         """Forward a SAA-gated utterance into Realtime as an input audio item.
 
-        The audio comes off SAA as PCM16 @ 16 kHz mono and matches
-        Realtime's input audio format byte-for-byte, so no resampling is
-        required. We push it as a single conversation item and then
+        The audio comes off SAA as PCM16 @ 16 kHz mono. Realtime requires
+        24 kHz, so on_speech() upsamples 16 kHz to 24 kHz before sending.
+        We push it as a single conversation item and then
         request the response, turn detection is off so this is fully
         client-driven.
         """
@@ -249,8 +249,8 @@ class OpenAIRealtimeBridge:
         # SAA already debounces overlapping utterances, but barge-ins can
         # arrive faster than the model finishes its previous reply.
         await self._cancel_response_if_any()
-        # Upsample 16 kHz → 24 kHz (gpt-realtime-2 requires ≥ 24 kHz).
-        # Simple nearest-neighbor resample: repeat every 2 samples → 3.
+        # Upsample 16 kHz -> 24 kHz (gpt-realtime-2 requires >= 24 kHz).
+        # Simple nearest-neighbor resample: repeat every 2 samples -> 3.
         pcm16 = np.ascontiguousarray(audio_pcm16_16k, dtype=np.int16)
         pcm24k = np.repeat(pcm16, 3)[::2].astype(np.int16)
         audio_b64 = base64.b64encode(pcm24k.tobytes()).decode("ascii")
@@ -265,21 +265,21 @@ class OpenAIRealtimeBridge:
         await self._send_json({"type": "response.create"})
         # The leading edge of mark_responding is asserted by the adapter
         # when the first audio frame lands on the outbound queue, but we
-        # also signal it here so the SAA cloud suppresses the entire LLM
+        # also signal it here so SAA suppresses predictions for the entire LLM
         # round-trip (including the silent thinking window) and not just
         # the playback. The adapter's tail timer flips it back to False
         # ~250 ms after the queue drains.
         if self._session is not None:
             await self._session.mark_responding(True)
         log.info(
-            "[openai-realtime] speech in: %.2fs (%d samples) → Realtime",
+            "[openai-realtime] speech in: %.2fs (%d samples) -> Realtime",
             duration_sec, audio_pcm16_16k.size,
         )
 
     async def on_user_speech_started(self) -> None:
         """Caller started talking again. Cancel the response + flush playback.
 
-        SAA flips its state to ``sending`` at the leading edge of a new
+        SAA emits ``on_user_speech_started`` at the leading edge of a new
         device-directed utterance, well before the utterance itself is
         complete and available on ``on_speech``. That's the right barge-
         in moment: we cancel Realtime's response, drop everything in our
@@ -311,7 +311,7 @@ class OpenAIRealtimeBridge:
         await self._send_json({"type": "response.create"})
 
     async def on_mark_played(self, name: str) -> None:
-        # End-of-utterance synchronisation lives outside this reference
+        # End-of-utterance synchronization lives outside this reference
         # because mark_responding's tail timer already covers the
         # callback-friendly cases. A bridge that needs strict "after
         # caller hears X" semantics would key on this.
@@ -340,15 +340,15 @@ class OpenAIRealtimeBridge:
     async def on_saa_stats(self, event) -> None:
         """Drive an adaptive threshold from SAA's periodic stats stream.
 
-        Threshold sits at the cloud default by default; if SAA's stats
-        show we're sending lots of audio (busy / cocktail-party call),
+        Threshold sits at the SAA default; if SAA's stats
+        show we're sending lots of audio (busy, multi-speaker call),
         raise toward ADAPTIVE_THRESHOLD_HIGH so we're stricter about what
         counts as device-directed. On a quiet call we relax back toward
-        ADAPTIVE_THRESHOLD_LOW so soft-spoken callers still get through.
+        ADAPTIVE_THRESHOLD_LOW so quiet callers still get through.
 
-        This is the canonical example of why exposing SAA controls on
-        :class:`CallSession` matters, callers don't have to hold their
-        own SDK handle to retune mid-call.
+        Exposing SAA controls on
+        :class:`CallSession` lets callers retune mid-call without holding
+        their own SDK handle.
         """
         if not self.adaptive_threshold or self._session is None:
             return
@@ -361,12 +361,12 @@ class OpenAIRealtimeBridge:
     async def on_caller_hangup(self) -> None:
         log.info("[openai-realtime] caller hung up")
 
-    # ── Realtime → SAA / Twilio ───────────────────────────────
+    # ── Realtime -> SAA / Twilio ───────────────────────────────
 
     async def _read_realtime(self) -> None:
         """Consume Realtime server events and forward TTS audio back to Twilio.
 
-        Realtime streams ``response.audio.delta`` events containing
+        Realtime streams ``response.output_audio.delta`` events containing
         base64-encoded PCM16. We decode and enqueue each delta on the
         adapter's outbound queue, the paced sender takes it from there.
         ``response.done`` / ``response.cancelled`` clear our

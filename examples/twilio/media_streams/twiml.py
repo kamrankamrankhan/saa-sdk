@@ -1,8 +1,8 @@
 """TwiML response generators for the Twilio voice webhook.
 
 Twilio's ``<Stream>`` verb opens a bidirectional WebSocket from the carrier
-into your server. The TwiML below is the minimum that gives you live media
-in both directions; production deployments will typically add ``<Say>``
+into your server. The TwiML below is the minimum TwiML for bidirectional
+media; production deployments will typically add ``<Say>``
 disclosure (call recording, AI use), DTMF capture, or a ``<Pause>`` for
 greeting alignment.
 
@@ -55,7 +55,7 @@ def twiml_for_stream(
 def twiml_with_recording_disclosure(
     stream_url: str,
     disclosure: str = (
-        "This call may be recorded and analysed by an automated assistant. "
+        "This call may be recorded and analyzed by an automated assistant. "
         "Stay on the line to continue, or hang up at any time."
     ),
     **kwargs,

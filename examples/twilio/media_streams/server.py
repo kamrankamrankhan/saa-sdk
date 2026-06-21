@@ -1,27 +1,27 @@
-"""SAA gating for Twilio Media Streams, production-grade reference adapter.
+"""SAA gating for Twilio Media Streams.
 
 Flow per call:
 
-    Caller (PSTN) → Twilio → /voice (TwiML) → /twilio (WebSocket)
-                                                  ↓
+    Caller (PSTN) -> Twilio -> /voice (TwiML) -> /twilio (WebSocket)
+                                                  v
                             inbound µ-law @ 8 kHz │ 20 ms
-                                                  ↓
+                                                  v
                                           audio.py decode + 16 kHz upsample
-                                                  ↓
+                                                  v
                                           AttentionClient (signaling-only)
-                                                  ↓
+                                                  v
                                           turn_ready (PCM16 @ 16 kHz)
-                                                  ↓
+                                                  v
                                           Bridge.on_speech()
                                           (your STT / LLM / TTS lives here)
-                                                  ↓
+                                                  v
                                           Bridge.outbound_pcm16_16k
-                                                  ↓
+                                                  v
                                           audio.py 8 kHz downsample + encode
-                                                  ↓
+                                                  v
                             outbound µ-law @ 8 kHz │ 20 ms
-                                                  ↓
-                                              Twilio → Caller
+                                                  v
+                                              Twilio -> Caller
 
 What this file does:
 
@@ -35,7 +35,7 @@ What this file does:
   (calls, audio bytes, SAA errors, barge-ins)
 * validates the ``X-Twilio-Signature`` header when ``TWILIO_AUTH_TOKEN`` is set
 * gates every call through SAA using ``enable_audio=False`` / ``enable_video=False``
-  plus the SDK's public ``feed_audio()`` API (no local mic / cam are ever opened)
+  plus the SDK's public ``feed_audio()`` API (no local mic / cam is opened)
 * paces outbound TTS at Twilio's recommended ~20 ms cadence so barge-in
   latency stays under a frame
 * propagates SAA state to a barge-in event so your bridge can flush its
@@ -102,14 +102,14 @@ logging.basicConfig(
 
 DEFAULT_THRESHOLD = float(os.environ.get("SAA_THRESHOLD", "0.7"))
 DEFAULT_TOKEN = os.environ.get("SAA_API_KEY", "")
-DEFAULT_SAA_URL = os.environ.get("ATTENLABS_URL")  # None → cloud default
+DEFAULT_SAA_URL = os.environ.get("ATTENLABS_URL")  # None -> SDK default
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 PUBLIC_HOSTNAME = os.environ.get("PUBLIC_HOSTNAME", "")  # set when behind ngrok / a load balancer
 OUTBOUND_PACE_SECONDS = float(os.environ.get("OUTBOUND_PACE_SECONDS", "0.02"))
 OUTBOUND_QUEUE_MAX = int(os.environ.get("OUTBOUND_QUEUE_MAX", "512"))
 # How long the adapter waits for SAA's `started` (warmup-complete) signal
 # before it begins forwarding caller PCM. Without this gate, the first
-# ~100 ms of every call lands in the cloud's warmup window and gets
+# ~100 ms of every call arrives before SAA is ready and gets
 # dropped, callers hear themselves say "hel-" before the gate engages.
 SAA_WAIT_READY_SECONDS = float(os.environ.get("SAA_WAIT_READY_SECONDS", "3.0"))
 # Trailing-silence tail kept on mark_responding=False so a sub-frame
@@ -166,7 +166,7 @@ async def _make_bridge() -> Bridge:
 # ── App ──────────────────────────────────────────────────────────────────
 
 
-app = FastAPI(title="saa × twilio adapter", version="1.0.0")
+app = FastAPI(title="saa + twilio adapter", version="1.0.0")
 
 
 @dataclass
@@ -311,7 +311,7 @@ class _TwilioCallSession:
     async def mark_responding(self, responding: bool) -> None:
         """Signal SAA that the agent is / is not currently speaking.
 
-        The SAA server suppresses predictions while responding==True so the
+        SAA does not emit turn_ready while responding==True so the
         agent's own TTS echo (coming back through the carrier loop) can't
         trigger a second ``turn_ready``. The adapter calls this
         automatically when bytes start / stop flowing through the outbound
@@ -328,8 +328,8 @@ class _TwilioCallSession:
         """Privacy mute, drop caller PCM at the relay before it reaches SAA.
 
         Useful for compliance: after a caller answers a recording-disclosure
-        prompt with "no", mute the SAA path so the cloud model never sees
-        the call audio. The bridge can still hear it locally; this only
+        prompt with "no", mute the SAA path so the call audio is not sent
+        to SAA. The bridge can still hear it locally; this only
         gates the upstream feed.
         """
         if self._closed:
@@ -349,7 +349,7 @@ class _TwilioCallSession:
         Effective range 0..1. Higher = SAA is stricter about what counts as
         device-directed (fewer false turn_ready firings, more missed
         utterances). Lower = more permissive. Reasonable telephony band
-        is 0.6 – 0.8; default is whatever the relay started with.
+        is 0.6 to 0.8; default is whatever the relay started with.
         """
         if self._closed:
             return
@@ -535,9 +535,7 @@ async def twilio_status(request: Request) -> Response:
 
     Twilio POSTs ``initiated`` / ``ringing`` / ``answered`` / ``completed``
     here for outbound calls. We log them at INFO so operators can correlate
-    call SIDs with their Twilio console; production stacks typically also
-    persist these into the call-events table that their billing or QA
-    pipeline consumes.
+    call SIDs with their Twilio console.
     """
     body = await request.body()
     _validate_twilio_signature(request, body)
@@ -561,13 +559,11 @@ async def twilio_status(request: Request) -> Response:
 async def twilio_media_stream(ws: WebSocket) -> None:
     """Bidirectional Twilio Media Streams handler with SAA gating per call.
 
-    Per Twilio's reference: a single call traverses ``connected`` →
-    ``start`` → N × (``media`` | ``dtmf`` | ``mark``) → ``stop``. We map
+    Per Twilio's reference: a single call traverses ``connected`` ->
+    ``start`` -> N x (``media`` | ``dtmf`` | ``mark``) -> ``stop``. We map
     those onto the bridge/session API so every call gets one ``open``,
     one ``close``, and a paced 20 ms outbound stream.
     """
-    # Twilio's client requires the "audio.twilio.com" subprotocol to be
-    # negotiated on accept. Skipping it leads to silent disconnects.
     # Real Twilio Media Streams does NOT request a subprotocol; echoing one it did
     # not offer makes its client drop the connection. Only echo if actually offered.
     _offered = ws.headers.get("sec-websocket-protocol", "") or ""
@@ -590,9 +586,9 @@ async def twilio_media_stream(ws: WebSocket) -> None:
         _AGGREGATE_STATS["calls_active"] += 1
 
     # AttentionClient is constructed with enable_audio=False / enable_video=False
-    # so the SDK never opens the host's mic/camera. Phone audio reaches the
-    # cloud exclusively via feed_audio() below — the supported pattern for
-    # external-capture adapters like this Twilio relay.
+    # so the SDK never opens the host's mic/camera. Phone audio reaches SAA
+    # exclusively via feed_audio() below, the pattern for external-capture
+    # adapters like this Twilio relay.
     saa = AttentionClient(
         token=DEFAULT_TOKEN,
         url=DEFAULT_SAA_URL,
@@ -616,7 +612,7 @@ async def twilio_media_stream(ws: WebSocket) -> None:
 
     # Helper for the SAA SDK's threaded callbacks: dispatch to the FastAPI
     # loop and swallow exceptions so a misbehaving bridge can't deadlock
-    # the SAA receive thread.
+    # SAA's callback thread.
     def _dispatch(coro):
         try:
             return asyncio.run_coroutine_threadsafe(coro, loop)
@@ -681,7 +677,7 @@ async def twilio_media_stream(ws: WebSocket) -> None:
         )
 
     # threading.Event set by on_started (and on_warmup_complete) so the
-    # "start" handler can block until SAA's model is loaded before forwarding
+    # "start" handler can block until SAA is ready before forwarding
     # caller audio. Using a threading.Event (not asyncio) lets us wait via
     # asyncio.to_thread without needing a running loop in the callback thread.
     ready_event = threading.Event()
@@ -729,8 +725,7 @@ async def twilio_media_stream(ws: WebSocket) -> None:
         ``OUTBOUND_PACE_SECONDS``. The sender also drives the
         ``mark_responding`` SAA control: it auto-asserts ``True`` the
         instant bytes start flowing and lowers it back to ``False`` after
-        ``RESPONDING_TAIL_SECONDS`` of silence. This is the single most
-        important SDK feature for telephony, without it the agent's own
+        ``RESPONDING_TAIL_SECONDS`` of silence. Without this the agent's own
         TTS bleeds back through the carrier and SAA re-fires
         ``turn_ready`` on the echo (feedback loop). The bridge can also
         call ``session.mark_responding`` explicitly if it needs finer
@@ -741,8 +736,7 @@ async def twilio_media_stream(ws: WebSocket) -> None:
         sentinel or when ``send_text`` raises.
         """
         # Tail check cadence, we wake every PACE so the cancel signal
-        # from the call cleanup propagates quickly. Production telephony
-        # uses a fixed 20 ms tick and ~250 ms responding tail.
+        # from the call cleanup propagates quickly.
         tail_check = min(OUTBOUND_PACE_SECONDS * 4, 0.05)
         pending = bytearray()  # µ-law bytes still to ship
         next_tick = time.monotonic()
@@ -772,13 +766,13 @@ async def twilio_media_stream(ws: WebSocket) -> None:
                     return
                 if stream_sid is None or session is None or not session.is_open:
                     continue
-                # First byte after silence → mark_responding(True). Done
+                # First byte after silence -> mark_responding(True). Done
                 # before the byte goes out so SAA suppression covers the
-                # whole TTS, including any one-frame race with the cloud.
+                # whole TTS, including any one-frame race.
                 if not responding:
                     responding = True
                     await session.mark_responding(True)
-                # PCM16 16 kHz → PCM16 8 kHz → µ-law @ 8 kHz.
+                # PCM16 16 kHz -> PCM16 8 kHz -> µ-law @ 8 kHz.
                 pcm16_16k = np.frombuffer(chunk, dtype=np.int16)
                 ulaw = pcm16_to_ulaw(downsample_16k_to_8k(pcm16_16k))
                 pending.extend(ulaw)
@@ -856,11 +850,11 @@ async def twilio_media_stream(ws: WebSocket) -> None:
                 saa_started = True
                 # Block briefly for SAA's `started` signal (set by the
                 # on_started / on_warmup_complete handlers above) so the first
-                # 100 ms of caller audio actually hits a warm model instead of
-                # landing in the cloud's warmup window. ready_event.wait()
+                # 100 ms of caller audio arrives after SAA is ready instead of
+                # before. ready_event.wait()
                 # blocks on a threading.Event so it must go through
                 # asyncio.to_thread to avoid stalling the event loop.
-                # Falling through on timeout is intentional: a slow cloud
+                # Falling through on timeout is intentional: a slow start
                 # is preferable to dropping the call.
                 ready_ok = await asyncio.to_thread(
                     ready_event.wait, SAA_WAIT_READY_SECONDS,
@@ -903,8 +897,8 @@ async def twilio_media_stream(ws: WebSocket) -> None:
                 while len(saa_buffer) >= SAA_FRAME_BYTES:
                     frame = bytes(saa_buffer[:SAA_FRAME_BYTES])
                     del saa_buffer[:SAA_FRAME_BYTES]
-                    # feed_audio expects raw int16 LE bytes; the SDK frames
-                    # them as MSG_AUDIO and ships them on the SAA WebSocket.
+                    # feed_audio expects raw int16 LE bytes; the SDK sends
+                    # them to SAA.
                     saa.feed_audio(frame)
 
             elif event == "dtmf":
@@ -914,9 +908,9 @@ async def twilio_media_stream(ws: WebSocket) -> None:
 
             elif event == "mark":
                 # Twilio confirms playback of a previously sent <mark>.
-                # Bridges use this for end-of-utterance synchronisation
-                # (e.g., to know when the agent's TTS has actually reached
-                # the caller's ear before allowing barge-in).
+                # Bridges use this for end-of-utterance synchronization
+                # (e.g., to know when the agent's TTS has reached
+                # the caller before allowing barge-in).
                 name = (msg.get("mark") or {}).get("name", "")
                 if name:
                     with suppress(Exception):
