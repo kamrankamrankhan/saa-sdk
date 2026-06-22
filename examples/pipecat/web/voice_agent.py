@@ -13,7 +13,9 @@ The result: the bot responds when, and only when, the user addresses it.
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
+import numpy as np
 from typing import Optional
 
 from pipecat.transports.daily.transport import DailyTransport, DailyParams
@@ -30,7 +32,6 @@ from pipecat.frames.frames import (
     LLMMessagesAppendFrame,
     TTSStartedFrame,
     TTSStoppedFrame,
-    UserStoppedSpeakingFrame,
 )
 
 from saa_pipecat_client import AttentionEngine, AttentionStartupError
@@ -38,6 +39,15 @@ from saa_pipecat_client import AttentionEngine, AttentionStartupError
 logger = logging.getLogger("web.voice_agent")
 
 OPENAI_REALTIME_SAMPLE_RATE = 24000
+
+
+def _turn_audio_to_24k_b64(pcm16_16k: bytes) -> str:
+    """
+    SAA turn audio is int16 mono 16 kHz; gpt-realtime needs 24 kHz.
+    """
+    pcm16 = np.frombuffer(pcm16_16k, dtype=np.int16)
+    pcm24 = np.repeat(pcm16, 3)[::2].astype(np.int16)
+    return base64.b64encode(pcm24.tobytes()).decode("ascii")
 
 
 class _BotSpeakingObserver(FrameProcessor):
@@ -113,18 +123,24 @@ async def run_voice_agent(
     engine.bind_task(task)
     bot_speaking.bind_engine(engine)
 
-    @engine.on_prediction
-    def _(p) -> None:
-        realtime.set_audio_input_paused(p.aligned_class != 2)
-
     @engine.on_turn_ready
     async def _(ev) -> None:
-        # SAA finished a device-directed turn, commit tp openai
-        logger.info(
-            "SAA turn_ready (%.1fs) — committing turn + requesting response",
-            ev.duration,
+        # SAA finished a device-directed turn, we get the full utterance
+        if not ev.audio_pcm16:
+            return
+
+        audio_b64 = _turn_audio_to_24k_b64(ev.audio_pcm16)
+        logger.info("SAA turn_ready (%.1fs) — injecting turn + requesting response", ev.duration)
+        await realtime.send_client_event(
+            events.ConversationItemCreateEvent(
+                item=events.ConversationItem(
+                    type="message",
+                    role="user",
+                    content=[events.ItemContent(type="input_audio", audio=audio_b64)],
+                ),
+            )
         )
-        await task.queue_frames([UserStoppedSpeakingFrame()])
+        await realtime.send_client_event(events.ResponseCreateEvent())
 
     @engine.on_interrupt
     async def _(ev) -> None:
